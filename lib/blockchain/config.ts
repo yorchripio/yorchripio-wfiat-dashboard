@@ -21,7 +21,7 @@ export const CHAINS = {
     name: "Worldchain",
     rpcUrl: process.env.NEXT_PUBLIC_WORLDCHAIN_RPC || "",
     explorerUrl: "https://worldscan.org",
-    color: "#8B5CF6",
+    color: "#010103",
   },
   base: {
     id: 8453,

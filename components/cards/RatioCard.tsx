@@ -25,8 +25,8 @@ export function RatioCard({
       return {
         label: "Saludable",
         emoji: "🟢",
-        color: "bg-green-100 text-green-800",
-        barColor: "bg-green-500",
+        color: "bg-[#4A13A5]/10 text-[#4A13A5]",
+        barColor: "bg-[#4A13A5]",
       };
     } else if (ratio >= 100) {
       return {
@@ -56,23 +56,27 @@ export function RatioCard({
     return `$${num.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
   };
 
-  // Calcular el ancho de la barra (máximo 100%)
-  const barWidth = Math.min(ratio, 120);
+  // Calcular el ancho de la barra proporcionalmente (0-120%)
+  const barWidth = Math.min(Math.max(ratio, 0), 120);
+  const barWidthPercent = (barWidth / 120) * 100;
+
+  // Posiciones proporcionales de los marcadores
+  const marker100Percent = (100 / 120) * 100; // 83.33%
 
   // Buffer (diferencia entre colateral y supply)
   const buffer = collateralTotal - supplyTotal;
 
   return (
-    <Card className="p-8 border-2 border-blue-500 shadow-lg">
+    <Card className="p-8 border-2 border-[#4A13A5] shadow-lg">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
         {/* Lado izquierdo: Ratio */}
         <div className="flex-1">
-          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+          <h2 className="text-sm font-medium text-[#010103]/60 uppercase tracking-wide mb-2">
             Ratio de Colateralización
           </h2>
 
           <div className="flex items-baseline gap-3">
-            <span className="text-5xl font-bold text-blue-600">
+            <span className="text-5xl font-bold text-[#010103]">
               {ratio.toFixed(1)}%
             </span>
             <Badge className={status.color}>
@@ -82,15 +86,25 @@ export function RatioCard({
 
           {/* Barra de progreso */}
           <div className="mt-6 mb-2">
-            <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-4 bg-[#010103]/10 rounded-full overflow-hidden relative">
               <div
                 className={`h-full ${status.barColor} transition-all duration-500`}
-                style={{ width: `${(barWidth / 120) * 100}%` }}
+                style={{ width: `${barWidthPercent}%` }}
+              />
+              {/* Marcador de 100% */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-[#010103]"
+                style={{ left: `${marker100Percent}%` }}
               />
             </div>
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <div className="flex justify-between text-xs text-[#010103]/50 mt-1 relative">
               <span>0%</span>
-              <span className="text-red-400">100%</span>
+              <span 
+                className="text-[#010103] font-medium absolute"
+                style={{ left: `${marker100Percent}%`, transform: 'translateX(-50%)' }}
+              >
+                100%
+              </span>
               <span>120%</span>
             </div>
           </div>
@@ -99,21 +113,21 @@ export function RatioCard({
         {/* Lado derecho: Métricas */}
         <div className="flex-1 space-y-4 md:text-right">
           <div>
-            <p className="text-sm text-gray-500">Supply Total</p>
-            <p className="text-xl font-semibold text-gray-900">
+            <p className="text-sm text-[#010103]/60">Supply Total</p>
+            <p className="text-xl font-semibold text-[#010103]">
               {formatNumber(supplyTotal)} wARS
             </p>
           </div>
 
           <div>
-            <p className="text-sm text-gray-500">Colateral Total</p>
-            <p className="text-xl font-semibold text-gray-900">
+            <p className="text-sm text-[#010103]/60">Colateral Total</p>
+            <p className="text-xl font-semibold text-[#010103]">
               {formatCurrency(collateralTotal)} ARS
             </p>
           </div>
 
           <div>
-            <p className="text-sm text-gray-500">Buffer</p>
+            <p className="text-sm text-[#010103]/60">Buffer</p>
             <p className={`text-xl font-semibold ${buffer >= 0 ? "text-green-600" : "text-red-600"}`}>
               {buffer >= 0 ? "+" : ""}{formatCurrency(buffer)} ARS
             </p>
@@ -122,8 +136,8 @@ export function RatioCard({
       </div>
 
       {/* Footer */}
-      <div className="mt-6 pt-4 border-t border-gray-100">
-        <p className="text-xs text-gray-400">
+      <div className="mt-6 pt-4 border-t border-[#010103]/10">
+        <p className="text-xs text-[#010103]/50">
           Última actualización: {lastUpdate}
         </p>
       </div>

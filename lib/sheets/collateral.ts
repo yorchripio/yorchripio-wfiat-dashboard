@@ -21,12 +21,14 @@ export interface ColateralData {
   total: number;
   totalFormatted: string;
   timestamp: string;
+  /** Rendimiento de la cartera (fila 37): % rendimiento × % colateral por instrumento */
+  rendimientoCartera: number;
 }
 
 /**
  * Parsea un valor monetario del sheet
  */
-function parseMoneyValue(value: string | number | null | undefined): number {
+export function parseMoneyValue(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") {
     return 0;
   }
@@ -51,7 +53,7 @@ function parseMoneyValue(value: string | number | null | undefined): number {
 /**
  * Parsea un valor de porcentaje
  */
-function parsePercentage(value: string | number | null | undefined): number {
+export function parsePercentage(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") {
     return 0;
   }
@@ -87,10 +89,10 @@ export async function getCollateralData(): Promise<ColateralData> {
 
     const sheets = google.sheets({ version: "v4", auth });
 
-    // Leer el rango de datos
+    // Leer el rango de datos (incluye fila 37: rendimiento cartera)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "Collateral Value!A1:Z30",
+      range: "Collateral Value!A1:Z40",
     });
 
     const rows = response.data.values;
@@ -118,6 +120,9 @@ const lastCol = 1;
 
     const fciRendimiento = parsePercentage(rows[23]?.[lastCol]);   // Fila 24: FCI Rendimiento
     const ctaRemRendimiento = parsePercentage(rows[24]?.[lastCol]); // Fila 25: Cta Rem Rendimiento
+
+    // Fila 37: rendimiento de la cartera (ponderado por % colateral)
+    const rendimientoCartera = parsePercentage(rows[36]?.[lastCol]);
 
     console.log("[Sheets] Valores leídos:", {
       fecha,
@@ -168,6 +173,7 @@ const lastCol = 1;
       total,
       totalFormatted: `$${total.toLocaleString("es-AR")}`,
       timestamp: new Date().toISOString(),
+      rendimientoCartera,
     };
 
   } catch (error) {

@@ -1,0 +1,10 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fondo circular violeta de World Chain -->
+  <circle cx="12" cy="12" r="12" fill="#8B5CF6"/>
+  <!-- Logomark de World - círculo blanco con diseño interno -->
+  <circle cx="12" cy="12" r="9" fill="white"/>
+  <!-- Diseño interno del logomark de World -->
+  <path d="M12 6C8.69 6 6 8.69 6 12C6 15.31 8.69 18 12 18C15.31 18 18 15.31 18 12C18 8.69 15.31 6 12 6ZM12 16C9.79 16 8 14.21 8 12C8 9.79 9.79 8 12 8C14.21 8 16 9.79 16 12C16 14.21 14.21 16 12 16Z" fill="#8B5CF6"/>
+  <!-- Elemento central del logomark -->
+  <circle cx="12" cy="12" r="2.5" fill="white"/>
+</svg>
