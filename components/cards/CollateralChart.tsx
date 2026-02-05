@@ -106,7 +106,7 @@ export function CollateralChart({ instrumentos, total }: CollateralChartProps) {
               outerRadius={100}
               paddingAngle={2}
               dataKey="value"
-              label={({ porcentaje }: { porcentaje: number }) => `${porcentaje.toFixed(1)}%`}
+              label={(props: Record<string, unknown>) => `${(props.porcentaje as number).toFixed(1)}%`}
               labelLine={false}
             >
               {chartData.map((entry, index) => (
