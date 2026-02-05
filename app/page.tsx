@@ -7,10 +7,12 @@ import { useEffect, useState } from "react";
 import { SupplyCard } from "@/components/cards/SupplyCard";
 import { RatioCard } from "@/components/cards/RatioCard";
 import { type TotalSupply } from "@/lib/blockchain/supply";
+import { type ColateralData } from "@/lib/sheets/collateral";
 import { RefreshCw } from "lucide-react";
 
 export default function Dashboard() {
   const [supplyData, setSupplyData] = useState<TotalSupply | null>(null);
+  const [collateralData, setCollateralData] = useState<ColateralData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string>("");
@@ -21,26 +23,39 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      const response = await fetch("/api/supply");
-      const result = await response.json();
+      // Cargar supply y colateral en paralelo
+      const [supplyResponse, collateralResponse] = await Promise.all([
+        fetch("/api/supply"),
+        fetch("/api/collateral"),
+      ]);
 
-      if (result.success) {
-        setSupplyData(result.data);
-        // Formatear fecha en zona horaria Argentina
-        const now = new Date();
-        setLastUpdate(
-          now.toLocaleString("es-AR", {
-            timeZone: "America/Argentina/Buenos_Aires",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          }) + " hs"
-        );
+      const supplyResult = await supplyResponse.json();
+      const collateralResult = await collateralResponse.json();
+
+      if (supplyResult.success) {
+        setSupplyData(supplyResult.data);
       } else {
-        setError(result.error || "Error al cargar datos");
+        setError(supplyResult.error || "Error al cargar supply");
       }
+
+      if (collateralResult.success) {
+        setCollateralData(collateralResult.data);
+      } else {
+        setError((prev) => prev ? `${prev}. ${collateralResult.error}` : collateralResult.error || "Error al cargar colateral");
+      }
+
+      // Formatear fecha en zona horaria Argentina
+      const now = new Date();
+      setLastUpdate(
+        now.toLocaleString("es-AR", {
+          timeZone: "America/Argentina/Buenos_Aires",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }) + " hs"
+      );
     } catch (err) {
       setError("Error de conexión");
       console.error(err);
@@ -54,10 +69,11 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  // TEMPORAL: Simular colateral hasta conectar Google Sheets
-  // Después vamos a reemplazar esto con datos reales
-  const collateralTotal = 600000000; // $600M ARS (ejemplo)
-  const ratio = supplyData ? (collateralTotal / supplyData.total) * 100 : 0;
+  // Calcular ratio de colateralización
+  const collateralTotal = collateralData?.total ?? 0;
+  const ratio = supplyData && collateralTotal > 0 
+    ? (collateralTotal / supplyData.total) * 100 
+    : 0;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -100,7 +116,7 @@ export default function Dashboard() {
         )}
 
         {/* Loading state */}
-        {loading && !supplyData && (
+        {loading && !supplyData && !collateralData && (
           <div className="flex items-center justify-center py-20">
             <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
             <span className="ml-3 text-gray-600">Cargando datos...</span>
@@ -108,7 +124,7 @@ export default function Dashboard() {
         )}
 
         {/* Dashboard */}
-        {supplyData && (
+        {supplyData && collateralData && (
           <div className="space-y-8">
             {/* Card del Ratio */}
             <RatioCard
@@ -130,13 +146,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Nota temporal */}
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                ⚠️ <strong>Nota:</strong> El colateral mostrado es un valor de ejemplo ($600M ARS). 
-                En el próximo paso conectaremos Google Sheets para obtener el colateral real.
-              </p>
-            </div>
           </div>
         )}
       </div>
