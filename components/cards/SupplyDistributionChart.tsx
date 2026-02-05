@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   Tooltip,
   Legend,
+  type PieLabelRenderProps,
 } from "recharts";
 
 interface SupplyDistributionChartProps {
@@ -65,7 +66,6 @@ export function SupplyDistributionChart({
   }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      const value = payload[0].value as number;
       return (
         <div className="bg-[#FFFFFF] p-3 rounded-lg shadow-lg border border-[#010103]/10">
           <p className="font-semibold text-[#010103]">{data.name}</p>
@@ -129,7 +129,11 @@ export function SupplyDistributionChart({
               outerRadius={100}
               paddingAngle={2}
               dataKey="supply"
-              label={({ porcentaje }) => `${porcentaje.toFixed(1)}%`}
+              label={(props: PieLabelRenderProps) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const p = (props as any).porcentaje as number;
+                return `${p.toFixed(1)}%`;
+              }}
               labelLine={false}
             >
               {chartData.map((entry, index) => (
