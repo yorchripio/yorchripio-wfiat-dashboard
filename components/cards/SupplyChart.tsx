@@ -104,7 +104,7 @@ export function SupplyChart({ supplyData }: SupplyChartProps) {
                 const barColor = entry.name === "Worldchain" && entry.success
                   ? "#4B5563" // Gris grafito
                   : entry.success
-                  ? CHAIN_COLORS[entry.name] || "#94A3B8"
+                  ? CHAIN_COLORS[entry.name as keyof typeof CHAIN_COLORS] || "#94A3B8"
                   : "#EF4444";
                 return (
                   <Cell
@@ -125,7 +125,7 @@ export function SupplyChart({ supplyData }: SupplyChartProps) {
           const legendColor = chain.name === "Worldchain" && chain.success
             ? "#4B5563" // Gris grafito
             : chain.success
-            ? CHAIN_COLORS[chain.name]
+            ? CHAIN_COLORS[chain.name as keyof typeof CHAIN_COLORS]
             : "#EF4444";
           return (
             <div key={chain.name} className="flex items-center gap-2">
