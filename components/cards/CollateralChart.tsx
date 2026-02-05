@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   Tooltip,
   Legend,
+  type PieLabelRenderProps,
 } from "recharts";
 
 interface CollateralChartProps {
@@ -106,7 +107,11 @@ export function CollateralChart({ instrumentos, total }: CollateralChartProps) {
               outerRadius={100}
               paddingAngle={2}
               dataKey="value"
-              label={(props: Record<string, unknown>) => `${(props.porcentaje as number).toFixed(1)}%`}
+              label={(props: PieLabelRenderProps) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const p = (props as any).porcentaje as number;
+                return `${p.toFixed(1)}%`;
+              }}
               labelLine={false}
             >
               {chartData.map((entry, index) => (
