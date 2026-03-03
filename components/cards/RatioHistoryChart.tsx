@@ -17,10 +17,13 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { getChartColorForToken } from "@/lib/constants/colors";
 
 interface RatioHistoryChartProps {
   historicalData: HistoricalDataPoint[];
   currentRatio: number;
+  /** Token para color del gráfico (wARS = azul, wBRL = verde, etc.). Por defecto wARS. */
+  tokenId?: string;
 }
 
 type TimeFilter = "1W" | "1M" | "YTD" | "Historic";
@@ -28,8 +31,10 @@ type TimeFilter = "1W" | "1M" | "YTD" | "Historic";
 export function RatioHistoryChart({
   historicalData,
   currentRatio,
+  tokenId = "wARS",
 }: RatioHistoryChartProps) {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Historic");
+  const chartColor = getChartColorForToken(tokenId);
 
   // Filtrar datos según el filtro de tiempo seleccionado
   const filteredData = useMemo(() => {
@@ -104,7 +109,7 @@ export function RatioHistoryChart({
           <p className="font-semibold text-[#010103] mb-2">
             {data.fechaFormatted}
           </p>
-          <p className="text-sm text-[#4A13A5] font-medium">
+          <p className="text-sm font-medium" style={{ color: chartColor }}>
             Ratio: {formatRatio(data.ratio)}
           </p>
           <p className="text-xs text-[#010103]/60 mt-1">
@@ -123,9 +128,9 @@ export function RatioHistoryChart({
     return null;
   };
 
-  // Determinar color de la línea según el ratio actual
+  // Determinar color de la línea según el ratio actual (saludable = color del token)
   const getLineColor = () => {
-    if (currentRatio > 103) return "#4A13A5"; // Violeta marca
+    if (currentRatio > 103) return chartColor;
     if (currentRatio >= 100) return "#F59E0B"; // Amarillo
     return "#EF4444"; // Rojo
   };
@@ -138,7 +143,7 @@ export function RatioHistoryChart({
             Evolución del Ratio de Colateralización
           </h3>
           <p className="text-sm text-[#010103]/60">
-            Ratio actual: <span className="font-semibold text-[#4A13A5]">{formatRatio(currentRatio)}</span>
+            Ratio actual: <span className="font-semibold" style={{ color: chartColor }}>{formatRatio(currentRatio)}</span>
           </p>
         </div>
         {/* Filtros de tiempo */}
@@ -193,7 +198,7 @@ export function RatioHistoryChart({
             {/* Línea de referencia en 103% (saludable) */}
             <ReferenceLine
               y={103}
-              stroke="#4A13A5"
+              stroke={chartColor}
               strokeDasharray="5 5"
               strokeOpacity={0.5}
             />

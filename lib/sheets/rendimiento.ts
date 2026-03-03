@@ -5,23 +5,20 @@ import { google } from "googleapis";
 import { parsePercentage } from "./collateral";
 
 /**
- * Un punto de datos diario con rendimiento y allocation
+ * Un punto de datos diario con rendimiento y allocation.
+ * allocation: % del total por tipo de instrumento (dinámico por fecha).
  */
 export interface RendimientoDiario {
   fecha: string;         // DD/MM/YYYY
   dateKey: string;       // YYYY-MM-DD para ordenar
   timestamp: number;     // ms UTC
   rendimiento: number;   // rendimiento diario de la cartera (%)
-  allocation: {
-    fci: number;         // % alocado en FCI
-    ctaRem: number;      // % alocado en Cta Remunerada
-    saldoVista: number;  // % alocado en Saldo Vista
-  };
-  aportes: {
-    fci: number;         // aporte al rendimiento del FCI (%)
-    ctaRem: number;      // aporte al rendimiento de Cta Rem (%)
-    saldoVista: number;  // aporte al rendimiento de Saldo Vista (%)
-  };
+  /** % alocado por tipo (ej. FCI, Cuenta_Remunerada, A_la_Vista, etc.) */
+  allocation: Record<string, number>;
+  /** Total colateral ese día (suma de todos los activos cargados en esa fecha) */
+  totalColateral?: number;
+  /** Por instrumento: valorTotal y cantidad */
+  byTipoDetalle?: Record<string, { valorTotal: number; cantidad: number }>;
 }
 
 /**
@@ -175,14 +172,9 @@ export async function getRendimientoData(): Promise<RendimientoDiario[]> {
       timestamp: Date.UTC(parts.year, parts.month - 1, parts.day),
       rendimiento,
       allocation: {
-        fci: parsePercentage(fciAllocRow[i]),
-        ctaRem: parsePercentage(ctaRemAllocRow[i]),
-        saldoVista: parsePercentage(saldoVistaAllocRow[i]),
-      },
-      aportes: {
-        fci: parsePercentage(fciAporteRow[i]),
-        ctaRem: parsePercentage(ctaRemAporteRow[i]),
-        saldoVista: parsePercentage(saldoVistaAporteRow[i]),
+        FCI: parsePercentage(fciAllocRow[i]),
+        Cuenta_Remunerada: parsePercentage(ctaRemAllocRow[i]),
+        A_la_Vista: parsePercentage(saldoVistaAllocRow[i]),
       },
     });
   }

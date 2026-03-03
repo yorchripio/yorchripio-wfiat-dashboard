@@ -5,12 +5,15 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getChartColorForToken } from "@/lib/constants/colors";
 
 interface RatioCardProps {
   ratio: number;
   supplyTotal: number;
   collateralTotal: number;
   lastUpdate: string;
+  /** Token seleccionado (wARS, wBRL…) para color de acento en la card */
+  tokenId?: string;
 }
 
 export function RatioCard({
@@ -18,15 +21,19 @@ export function RatioCard({
   supplyTotal,
   collateralTotal,
   lastUpdate,
+  tokenId = "wARS",
 }: RatioCardProps) {
-  // Determinar estado según el ratio
+  const chartColor = getChartColorForToken(tokenId);
+
+  // Determinar estado según el ratio (saludable usa color del token)
   const getStatus = (ratio: number) => {
     if (ratio > 103) {
       return {
         label: "Saludable",
         emoji: "🟢",
-        color: "bg-[#4A13A5]/10 text-[#4A13A5]",
-        barColor: "bg-[#4A13A5]",
+        color: "",
+        barColor: "",
+        useChartColor: true as const,
       };
     } else if (ratio >= 100) {
       return {
@@ -34,6 +41,7 @@ export function RatioCard({
         emoji: "🟡",
         color: "bg-yellow-100 text-yellow-800",
         barColor: "bg-yellow-500",
+        useChartColor: false as const,
       };
     } else {
       return {
@@ -41,6 +49,7 @@ export function RatioCard({
         emoji: "🔴",
         color: "bg-red-100 text-red-800",
         barColor: "bg-red-500",
+        useChartColor: false as const,
       };
     }
   };
@@ -67,7 +76,10 @@ export function RatioCard({
   const buffer = collateralTotal - supplyTotal;
 
   return (
-    <Card className="p-8 border-2 border-[#4A13A5] shadow-lg">
+    <Card
+      className="p-8 border-2 shadow-lg"
+      style={{ borderColor: chartColor }}
+    >
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
         {/* Lado izquierdo: Ratio */}
         <div className="flex-1">
@@ -79,7 +91,14 @@ export function RatioCard({
             <span className="text-5xl font-bold text-[#010103]">
               {ratio.toFixed(1)}%
             </span>
-            <Badge className={status.color}>
+            <Badge
+              className={status.useChartColor ? "" : status.color}
+              style={
+                status.useChartColor
+                  ? { backgroundColor: `${chartColor}20`, color: chartColor }
+                  : undefined
+              }
+            >
               {status.emoji} {status.label}
             </Badge>
           </div>
@@ -88,8 +107,11 @@ export function RatioCard({
           <div className="mt-6 mb-2">
             <div className="h-4 bg-[#010103]/10 rounded-full overflow-hidden relative">
               <div
-                className={`h-full ${status.barColor} transition-all duration-500`}
-                style={{ width: `${barWidthPercent}%` }}
+                className={`h-full rounded-full transition-all duration-500 ${status.useChartColor ? "" : status.barColor}`}
+                style={{
+                  width: `${barWidthPercent}%`,
+                  ...(status.useChartColor ? { backgroundColor: chartColor } : {}),
+                }}
               />
               {/* Marcador de 100% */}
               <div

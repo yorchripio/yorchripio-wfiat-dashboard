@@ -5,7 +5,7 @@
 
 import { Card } from "@/components/ui/card";
 import { type InstrumentoColateral } from "@/lib/sheets/collateral";
-import { COLLATERAL_COLORS } from "@/lib/constants/colors";
+import { getChartColorForToken } from "@/lib/constants/colors";
 import {
   BarChart,
   Bar,
@@ -19,6 +19,8 @@ import {
 
 interface RendimientosChartProps {
   instrumentos: InstrumentoColateral[];
+  /** Token seleccionado (wARS, wBRL…) para color del gráfico */
+  tokenId?: string;
 }
 
 // Nombres más amigables para mostrar
@@ -28,9 +30,21 @@ const NOMBRES_CORTOS: Record<string, string> = {
   A_la_Vista: "Saldo Vista",
 };
 
+const BAR_OPACITIES = [1, 0.85, 0.7];
+
+function hexWithOpacity(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
+
 export function RendimientosChart({
   instrumentos,
+  tokenId = "wARS",
 }: RendimientosChartProps) {
+  const chartColor = getChartColorForToken(tokenId);
+
   // Preparar datos para el gráfico (solo instrumentos activos con rendimiento)
   const chartData = instrumentos
     .filter((inst) => inst.activo && inst.valorTotal > 0)
@@ -56,7 +70,7 @@ export function RendimientosChart({
       return (
         <div className="bg-[#FFFFFF] p-3 rounded-lg shadow-lg border border-[#010103]/10">
           <p className="font-semibold text-[#010103]">{data.name}</p>
-          <p className="text-sm text-green-600 font-medium">
+          <p className="text-sm font-medium" style={{ color: chartColor }}>
             Rendimiento: {value.toFixed(3)}% diario
           </p>
           <p className="text-xs text-gray-500 mt-1">
@@ -121,7 +135,7 @@ export function RendimientosChart({
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={COLLATERAL_COLORS[entry.tipo as keyof typeof COLLATERAL_COLORS] || "#94A3B8"}
+                  fill={hexWithOpacity(chartColor, BAR_OPACITIES[index % BAR_OPACITIES.length])}
                 />
               ))}
             </Bar>
@@ -131,7 +145,7 @@ export function RendimientosChart({
 
       {/* Detalle de rendimientos */}
       <div className="mt-4 space-y-2">
-        {chartData.map((inst) => (
+        {chartData.map((inst, index) => (
           <div
             key={inst.tipo}
             className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
@@ -139,11 +153,13 @@ export function RendimientosChart({
             <div className="flex items-center gap-2">
               <div
                 className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: COLLATERAL_COLORS[inst.tipo as keyof typeof COLLATERAL_COLORS] }}
+                style={{
+                  backgroundColor: hexWithOpacity(chartColor, BAR_OPACITIES[index % BAR_OPACITIES.length]),
+                }}
               />
               <span className="text-xs text-gray-600">{inst.name}</span>
             </div>
-            <span className="text-xs font-semibold text-green-600">
+            <span className="text-xs font-semibold" style={{ color: chartColor }}>
               {inst.rendimiento.toFixed(3)}% diario
             </span>
           </div>

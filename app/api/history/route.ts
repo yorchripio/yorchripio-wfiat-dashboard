@@ -1,33 +1,33 @@
 // app/api/history/route.ts
-// Endpoint que retorna datos históricos desde Google Sheets
+// Historial combinado (ratio): colateral por fecha desde allocations; supply desde snapshots o query.
 
 import { NextResponse } from "next/server";
-import { getHistoricalData } from "@/lib/sheets/history";
+import { getHistoricalDataFromDB } from "@/lib/db/history";
 
-export async function GET() {
+export async function GET(request: Request): Promise<NextResponse> {
   try {
-    console.log("[API /history] Consultando datos históricos de Google Sheets...");
+    const { searchParams } = new URL(request.url);
+    const supplyTotalParam = searchParams.get("supplyTotal");
+    const currentSupplyFallback =
+      supplyTotalParam != null ? parseFloat(supplyTotalParam) : undefined;
+    const validFallback =
+      typeof currentSupplyFallback === "number" &&
+      !Number.isNaN(currentSupplyFallback) &&
+      currentSupplyFallback > 0
+        ? currentSupplyFallback
+        : undefined;
 
-    const historicalData = await getHistoricalData();
-
-    console.log("[API /history] Datos históricos obtenidos:", {
-      puntos: historicalData.length,
-      fechaInicio: historicalData[0]?.fecha,
-      fechaFin: historicalData[historicalData.length - 1]?.fecha,
-    });
-
+    const historicalData = await getHistoricalDataFromDB(365, validFallback);
     return NextResponse.json({
       success: true,
       data: historicalData,
     });
-
   } catch (error) {
     console.error("[API /history] Error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error desconocido",
+        error: error instanceof Error ? error.message : "Error al cargar histórico",
       },
       { status: 500 }
     );

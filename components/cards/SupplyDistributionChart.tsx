@@ -5,7 +5,7 @@
 
 import { Card } from "@/components/ui/card";
 import { type TotalSupply } from "@/lib/blockchain/supply";
-import { CHAIN_COLORS } from "@/lib/constants/colors";
+import { CHAIN_COLORS, getChartColorForToken } from "@/lib/constants/colors";
 import {
   PieChart,
   Pie,
@@ -18,11 +18,17 @@ import {
 
 interface SupplyDistributionChartProps {
   supplyData: TotalSupply;
+  /** Token para color de acentos en el gráfico (ej. wARS, wBRL). Por defecto wARS. */
+  tokenId?: string;
 }
+
+const CHART_TOKEN = "wARS";
 
 export function SupplyDistributionChart({
   supplyData,
+  tokenId = CHART_TOKEN,
 }: SupplyDistributionChartProps) {
+  const chartColor = getChartColorForToken(tokenId);
   // Preparar datos para el gráfico (solo chains exitosas)
   const chartData = [
     {
@@ -72,7 +78,7 @@ export function SupplyDistributionChart({
           <p className="text-sm text-gray-600">
             Supply: {formatSupply(data.supply)}
           </p>
-          <p className="text-sm font-medium text-[#4A13A5]">
+          <p className="text-sm font-medium" style={{ color: chartColor }}>
             Porcentaje: {data.porcentaje.toFixed(2)}%
           </p>
         </div>

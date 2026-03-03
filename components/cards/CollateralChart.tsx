@@ -5,7 +5,7 @@
 
 import { Card } from "@/components/ui/card";
 import { type InstrumentoColateral } from "@/lib/sheets/collateral";
-import { COLLATERAL_COLORS } from "@/lib/constants/colors";
+import { getChartColorForToken } from "@/lib/constants/colors";
 import {
   PieChart,
   Pie,
@@ -19,6 +19,8 @@ import {
 interface CollateralChartProps {
   instrumentos: InstrumentoColateral[];
   total: number;
+  /** Token seleccionado (wARS, wBRL…) para color del gráfico */
+  tokenId?: string;
 }
 
 // Nombres más amigables para mostrar
@@ -28,7 +30,19 @@ const NOMBRES_CORTOS: Record<string, string> = {
   A_la_Vista: "Saldo Vista",
 };
 
-export function CollateralChart({ instrumentos, total }: CollateralChartProps) {
+/** Opacidades para distinguir segmentos del pie manteniendo el color del token */
+const SEGMENT_OPACITIES = [1, 0.85, 0.7];
+
+function hexWithOpacity(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
+
+export function CollateralChart({ instrumentos, total, tokenId = "wARS" }: CollateralChartProps) {
+  const chartColor = getChartColorForToken(tokenId);
+
   // Preparar datos para el gráfico (solo instrumentos activos)
   const chartData = instrumentos
     .filter((inst) => inst.activo && inst.valorTotal > 0)
@@ -117,7 +131,7 @@ export function CollateralChart({ instrumentos, total }: CollateralChartProps) {
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={COLLATERAL_COLORS[entry.tipo as keyof typeof COLLATERAL_COLORS] || "#94A3B8"}
+                  fill={hexWithOpacity(chartColor, SEGMENT_OPACITIES[index % SEGMENT_OPACITIES.length])}
                   stroke="#FFFFFF"
                   strokeWidth={2}
                 />
@@ -131,7 +145,7 @@ export function CollateralChart({ instrumentos, total }: CollateralChartProps) {
 
       {/* Detalle de instrumentos */}
       <div className="mt-4 space-y-3">
-        {chartData.map((inst) => (
+        {chartData.map((inst, index) => (
           <div
             key={inst.tipo}
             className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -139,7 +153,12 @@ export function CollateralChart({ instrumentos, total }: CollateralChartProps) {
             <div className="flex items-center gap-3">
               <div
                 className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: COLLATERAL_COLORS[inst.tipo as keyof typeof COLLATERAL_COLORS] }}
+                style={{
+                  backgroundColor: hexWithOpacity(
+                    chartColor,
+                    SEGMENT_OPACITIES[index % SEGMENT_OPACITIES.length]
+                  ),
+                }}
               />
               <span className="text-sm font-medium text-[#010103]">
                 {inst.name}

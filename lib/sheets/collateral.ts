@@ -2,6 +2,7 @@
 // Funciones para leer el colateral desde Google Sheets
 
 import { google } from "googleapis";
+import { parseSheetDateParts, sheetDateToKey, sheetDateToDate } from "./sheet-date";
 
 // Tipos para los datos del colateral
 export interface InstrumentoColateral {
@@ -104,7 +105,7 @@ export async function getCollateralData(): Promise<ColateralData> {
     console.log("[Sheets] Filas obtenidas:", rows.length);
 
     // La columna B (índice 1) tiene los datos más recientes
-const lastCol = 1;
+    const lastCol = 1;
 
     // Extraer valores (ajustado a la estructura real del sheet)
     // Fila 3 = índice 2, Fila 4 = índice 3, etc.
@@ -180,4 +181,116 @@ const lastCol = 1;
     console.error("[Sheets] Error:", error);
     throw error;
   }
+}
+
+/** Una fila de colateral por instrumento (para importar a DB) */
+export interface CollateralRowFromSheet {
+  dateKey: string;
+  fecha: Date;
+  instrumentos: Array<{
+    tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
+    nombre: string;
+    entidad: string;
+    valorTotal: number;
+    /** Valor de la cuotaparte (solo FCI: fila 20 del sheet). Cta Rem / Saldo Vista = 1 implícito */
+    valorCuotaparte?: number;
+    /** Cantidad de cuotas/partes (FCI: valorTotal/valorCuotaparte; otros: 1) */
+    cantidadCuotasPartes?: number;
+  }>;
+}
+
+/** Fila 20 del sheet = valor cuotaparte del FCI (Adcap) por columna/fecha */
+const FCI_CUOTAPARTE_ROW_INDEX = 19; // 0-based → fila 20
+
+/** Mapeo fila del sheet -> tipo y datos del instrumento (igual que getCollateralData) */
+const SHEET_ROW_TO_INSTRUMENT: Array<{
+  rowIndex: number;
+  tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
+  nombre: string;
+  entidad: string;
+}> = [
+  { rowIndex: 3, tipo: "FCI", nombre: "Adcap Ahorro Pesos - Clase B", entidad: "Inversiones Banco Comercio" },
+  { rowIndex: 4, tipo: "Cuenta_Remunerada", nombre: "Cta Remunerada Comercio", entidad: "Banco Comercio" },
+  { rowIndex: 5, tipo: "A_la_Vista", nombre: "Saldo Vista", entidad: "Banco Comercio" },
+];
+
+/**
+ * Lee todo el sheet "Collateral Value": todas las columnas (cada columna = una fecha).
+ * Fila 3 = fechas, filas 4-6 = valor total FCI/Cta Rem/Saldo Vista, fila 20 = valor cuotaparte FCI.
+ */
+export async function getAllCollateralFromSheet(): Promise<CollateralRowFromSheet[]> {
+  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
+  const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+
+  if (!clientEmail || !privateKey || !spreadsheetId) {
+    throw new Error("Faltan credenciales de Google Sheets en .env.local");
+  }
+
+  const auth = new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  });
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "Collateral Value!B1:ZZ21",
+    valueRenderOption: "FORMATTED_VALUE",
+  });
+
+  const rows = response.data.values;
+  if (!rows || rows.length < 6) {
+    throw new Error("No se encontraron suficientes filas en Collateral Value");
+  }
+
+  const datesRow = rows[2] ?? [];
+  const fciCuotaparteRow = rows[FCI_CUOTAPARTE_ROW_INDEX] ?? [];
+  const result: CollateralRowFromSheet[] = [];
+
+  for (let col = 0; col < datesRow.length; col++) {
+    const rawDate = datesRow[col];
+    if (rawDate == null || String(rawDate).trim() === "") continue;
+
+    const parts = parseSheetDateParts(rawDate);
+    if (!parts) continue;
+
+    const dateKey = sheetDateToKey(parts);
+    const fecha = sheetDateToDate(parts);
+
+    const instrumentos: CollateralRowFromSheet["instrumentos"] = [];
+    for (const { rowIndex, tipo, nombre, entidad } of SHEET_ROW_TO_INSTRUMENT) {
+      const valorTotal = parseMoneyValue(rows[rowIndex]?.[col]);
+      if (tipo === "FCI") {
+        const valorCuotaparteRaw = parseMoneyValue(fciCuotaparteRow[col]);
+        const valorCuotaparte =
+          valorCuotaparteRaw > 0 ? valorCuotaparteRaw : valorTotal;
+        const cantidadCuotasPartes =
+          valorCuotaparte > 0 ? valorTotal / valorCuotaparte : 1;
+        instrumentos.push({
+          tipo,
+          nombre,
+          entidad,
+          valorTotal,
+          valorCuotaparte,
+          cantidadCuotasPartes,
+        });
+      } else {
+        instrumentos.push({
+          tipo,
+          nombre,
+          entidad,
+          valorTotal,
+          valorCuotaparte: valorTotal,
+          cantidadCuotasPartes: 1,
+        });
+      }
+    }
+
+    result.push({ dateKey, fecha, instrumentos });
+  }
+
+  result.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+  return result;
 }

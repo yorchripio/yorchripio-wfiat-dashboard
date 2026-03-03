@@ -8,25 +8,51 @@ export const WARS_CONFIG = {
   decimals: 18,
 } as const;
 
+function parseRpcUrls(primary: string | undefined, fallbacks: string | undefined): string[] {
+  const all = [
+    primary ?? "",
+    ...(fallbacks?.split(",") ?? []),
+  ]
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+  return Array.from(new Set(all));
+}
+
+const ethereumRpcUrls = parseRpcUrls(
+  process.env.NEXT_PUBLIC_ETHEREUM_RPC,
+  process.env.NEXT_PUBLIC_ETHEREUM_RPCS
+);
+const worldchainRpcUrls = parseRpcUrls(
+  process.env.NEXT_PUBLIC_WORLDCHAIN_RPC,
+  process.env.NEXT_PUBLIC_WORLDCHAIN_RPCS
+);
+const baseRpcUrls = parseRpcUrls(
+  process.env.NEXT_PUBLIC_BASE_RPC,
+  process.env.NEXT_PUBLIC_BASE_RPCS
+);
+
 export const CHAINS = {
   ethereum: {
     id: 1,
     name: "Ethereum",
-    rpcUrl: process.env.NEXT_PUBLIC_ETHEREUM_RPC || "",
+    rpcUrl: ethereumRpcUrls[0] ?? "",
+    rpcUrls: ethereumRpcUrls,
     explorerUrl: "https://etherscan.io",
     color: "#627EEA",
   },
   worldchain: {
     id: 480,
     name: "Worldchain",
-    rpcUrl: process.env.NEXT_PUBLIC_WORLDCHAIN_RPC || "",
+    rpcUrl: worldchainRpcUrls[0] ?? "",
+    rpcUrls: worldchainRpcUrls,
     explorerUrl: "https://worldscan.org",
     color: "#010103",
   },
   base: {
     id: 8453,
     name: "Base",
-    rpcUrl: process.env.NEXT_PUBLIC_BASE_RPC || "",
+    rpcUrl: baseRpcUrls[0] ?? "",
+    rpcUrls: baseRpcUrls,
     explorerUrl: "https://basescan.org",
     color: "#0052FF",
   },

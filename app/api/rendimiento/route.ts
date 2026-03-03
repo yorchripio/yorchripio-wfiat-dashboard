@@ -1,21 +1,20 @@
 // app/api/rendimiento/route.ts
-// Endpoint que retorna datos históricos de rendimiento de la cartera
+// Rendimiento histórico de la cartera desde la DB (collateral_snapshots).
 
 import { NextResponse } from "next/server";
-import { getRendimientoData } from "@/lib/sheets/rendimiento";
+import { getRendimientoDataFromDB } from "@/lib/db/rendimiento";
 
-export async function GET() {
+export async function GET(): Promise<NextResponse> {
   try {
-    console.log("[API /rendimiento] Consultando rendimiento histórico...");
-    const data = await getRendimientoData();
-
-    console.log("[API /rendimiento] Datos obtenidos:", data.length, "puntos");
-
-    return NextResponse.json({ success: true, data });
+    const { data, tiposQueRinden } = await getRendimientoDataFromDB();
+    return NextResponse.json({ success: true, data, tiposQueRinden });
   } catch (error) {
     console.error("[API /rendimiento] Error:", error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Error desconocido" },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Error al cargar rendimiento",
+      },
       { status: 500 }
     );
   }
