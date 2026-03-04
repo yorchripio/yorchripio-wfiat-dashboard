@@ -11,8 +11,6 @@ import { decrypt } from "@/lib/encryption";
 import { verify2FAToken } from "@/lib/two-factor-token";
 import { loginSchema } from "@/lib/validations/auth";
 
-// AUTH_SECRET es obligatorio; en desarrollo usamos fallback si no está.
-// Sin secret, Auth.js lanza "There was a problem with the server configuration".
 const authSecret =
   process.env.AUTH_SECRET ||
   (process.env.NODE_ENV === "development"
@@ -25,27 +23,9 @@ if (!authSecret) {
   );
 }
 
-// En producción, AUTH_URL debe ser la URL pública para que redirects y cookies funcionen.
-const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
-if (process.env.NODE_ENV === "production" && authUrl) {
-  try {
-    const u = new URL(authUrl);
-    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") {
-      console.warn(
-        "[auth] AUTH_URL/NEXTAUTH_URL apunta a localhost en producción. En Vercel definí AUTH_URL con la URL pública (ej. https://tu-app.vercel.app)."
-      );
-    }
-  } catch {
-    console.warn("[auth] AUTH_URL/NEXTAUTH_URL inválido en producción. Usá la URL pública completa (ej. https://tu-app.vercel.app).");
-  }
-} else if (process.env.NODE_ENV === "production" && !authUrl) {
-  console.warn(
-    "[auth] En producción no está definido AUTH_URL ni NEXTAUTH_URL. En Vercel → Settings → Environment Variables agregá AUTH_URL con la URL pública (ej. https://tu-app.vercel.app) para que el login y los redirects funcionen."
-  );
-}
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
+  basePath: "/api/auth",
   providers: [
     Credentials({
       credentials: {
@@ -71,14 +51,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             typeof rawToken === "string" && rawToken.trim().length > 0
               ? rawToken.trim()
               : null;
-
-          console.log("[auth] authorize called:", {
-            email,
-            hasCode: !!code,
-            hasPassword: !!password,
-            hasTwoFactorToken: !!tempToken,
-            tokenLength: tempToken?.length ?? 0,
-          });
 
           if (tempToken && code) {
             const payload = await verify2FAToken(tempToken);
@@ -173,6 +145,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
     error: "/login",
   },
-  debug: process.env.NODE_ENV !== "production",
   trustHost: true,
 });
