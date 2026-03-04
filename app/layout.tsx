@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "wFIAT Dashboard - wARS",
-  description: "Dashboard de monitoreo para wARS (Wrapped Argentine Peso)",
+  title: "Ripio wFIAT Dashboard",
+  description: "Dashboard de monitoreo - wFIAT",
 };
 
 export default function RootLayout({
