@@ -66,10 +66,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const password =
             typeof credentials.password === "string" ? credentials.password : "";
 
+          const rawToken = (credentials as { twoFactorToken?: string }).twoFactorToken;
           const tempToken =
-            typeof (credentials as { twoFactorToken?: string }).twoFactorToken === "string"
-              ? (credentials as { twoFactorToken: string }).twoFactorToken.trim()
+            typeof rawToken === "string" && rawToken.trim().length > 0
+              ? rawToken.trim()
               : null;
+
+          console.log("[auth] authorize called:", {
+            email,
+            hasCode: !!code,
+            hasPassword: !!password,
+            hasTwoFactorToken: !!tempToken,
+            tokenLength: tempToken?.length ?? 0,
+          });
 
           if (tempToken && code) {
             const payload = await verify2FAToken(tempToken);
@@ -162,6 +171,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/login",
+    error: "/login",
   },
+  debug: process.env.NODE_ENV !== "production",
   trustHost: true,
 });

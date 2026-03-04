@@ -74,13 +74,12 @@ function LoginForm(): React.ReactElement {
         setLoading(false);
         return;
       }
-      if (result.error) {
+      if (result.error || !result.ok) {
         setError("Credenciales inválidas");
         setLoading(false);
         return;
       }
-      const url = result.url ?? callbackUrl;
-      window.location.replace(url);
+      window.location.replace(result.url ?? callbackUrl);
     } catch (err) {
       console.error(err);
       setError("Error de conexión");
@@ -93,6 +92,12 @@ function LoginForm(): React.ReactElement {
     setError(null);
     setLoading(true);
     try {
+      if (!twoFactorToken) {
+        setError("Token de sesión 2FA no disponible. Volvé a ingresar email y contraseña.");
+        setStep("credentials");
+        setLoading(false);
+        return;
+      }
       const result = await signIn("credentials", {
         email: email.trim(),
         code: code.trim(),
@@ -105,13 +110,15 @@ function LoginForm(): React.ReactElement {
         setLoading(false);
         return;
       }
-      if (result.error) {
-        setError(result.error === "CredentialsSignin" ? "Código 2FA incorrecto o expirado" : result.error);
+      if (result.error || !result.ok) {
+        const msg = result.error === "CredentialsSignin"
+          ? "Código 2FA incorrecto o expirado"
+          : result.error ?? "Error al verificar 2FA";
+        setError(msg);
         setLoading(false);
         return;
       }
-      const url = result.url ?? callbackUrl;
-      window.location.replace(url);
+      window.location.replace(result.url ?? callbackUrl);
     } catch (err) {
       console.error(err);
       setError("Error de conexión");
