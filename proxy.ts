@@ -11,8 +11,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (path === "/login") return NextResponse.next();
   if (path.startsWith("/api/auth")) return NextResponse.next();
 
+  const isSecure = request.nextUrl.protocol === "https:";
   const token = await getToken({
     req: request,
+    secureCookie: isSecure,
     secret:
       process.env.AUTH_SECRET ||
       (process.env.NODE_ENV === "development"
