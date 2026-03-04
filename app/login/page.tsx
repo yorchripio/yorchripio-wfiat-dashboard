@@ -35,8 +35,17 @@ function LoginForm(): React.ReactElement {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
+        credentials: "same-origin",
       });
-      const data = await res.json();
+      let data: { success?: boolean; requires2FA?: boolean; error?: string };
+      try {
+        const text = await res.text();
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        setError("Respuesta inválida del servidor. Intentá de nuevo.");
+        setLoading(false);
+        return;
+      }
 
       if (!data.success) {
         setError(data.error ?? "Error al iniciar sesión");
@@ -60,6 +69,10 @@ function LoginForm(): React.ReactElement {
         setLoading(false);
         return;
       }
+      if (result?.url) {
+        window.location.href = result.url;
+        return;
+      }
       window.location.href = callbackUrl;
     } catch (err) {
       console.error(err);
@@ -79,8 +92,12 @@ function LoginForm(): React.ReactElement {
         redirect: false,
       });
       if (result?.error) {
-        setError("Código 2FA incorrecto o expirado");
+        setError(result.error === "CredentialsSignin" ? "Código 2FA incorrecto o expirado" : result.error);
         setLoading(false);
+        return;
+      }
+      if (result?.url) {
+        window.location.href = result.url;
         return;
       }
       window.location.href = callbackUrl;
@@ -159,7 +176,7 @@ function LoginForm(): React.ReactElement {
             ) : (
               <form onSubmit={handleSubmit2FA} className="space-y-4">
                 <p className="text-sm text-[#010103]/70">
-                  Ingresá el código de 6 dígitos de tu app de autenticación.
+                  Contraseña correcta. Ingresá el código de 6 dígitos de tu app de autenticación para <strong>{email || "tu cuenta"}</strong>.
                 </p>
                 <div>
                   <label

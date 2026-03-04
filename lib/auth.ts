@@ -18,13 +18,19 @@ function getCookieFromRequest(request: Request, name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-// En desarrollo, si no hay AUTH_SECRET usamos uno por defecto (solo local).
-// En producción conviene definir AUTH_SECRET en el entorno.
+// AUTH_SECRET es obligatorio; en desarrollo usamos fallback si no está.
+// Sin secret, Auth.js lanza "There was a problem with the server configuration".
 const authSecret =
   process.env.AUTH_SECRET ||
   (process.env.NODE_ENV === "development"
     ? "wfiat-dev-secret-cambiar-en-produccion"
-    : undefined);
+    : "");
+
+if (!authSecret) {
+  throw new Error(
+    "AUTH_SECRET no está definido. En .env.local (local) o en Variables de Entorno (Vercel) agregá: AUTH_SECRET. Generar con: openssl rand -base64 32"
+  );
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
@@ -36,70 +42,85 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         code: { label: "Código 2FA", type: "text" },
       },
       async authorize(credentials, request) {
-        if (!credentials?.email || typeof credentials.email !== "string") {
-          throw new CredentialsSignin("Credenciales inválidas");
-        }
-
-        const email = credentials.email.trim().toLowerCase();
-        const code =
-          typeof credentials.code === "string" ? credentials.code.trim() : "";
-        const password =
-          typeof credentials.password === "string" ? credentials.password : "";
-
-        // Flujo 2FA: cookie con token + código
-        const cookieName = get2FACookieName();
-        const tempToken = getCookieFromRequest(request, cookieName);
-        if (tempToken && code) {
-          const payload = await verify2FAToken(tempToken);
-          if (!payload) throw new CredentialsSignin("Sesión 2FA expirada");
-          const user = await prisma.user.findUnique({
-            where: { id: payload.userId },
-          });
-          if (!user || !user.isActive || user.email !== email) {
+        try {
+          if (!credentials?.email || typeof credentials.email !== "string") {
             throw new CredentialsSignin("Credenciales inválidas");
           }
-          if (!user.totpEnabled || !user.totpSecret) {
-            throw new CredentialsSignin("2FA no configurado");
+
+          const email = credentials.email.trim().toLowerCase();
+          const code =
+            typeof credentials.code === "string" ? credentials.code.trim() : "";
+          const password =
+            typeof credentials.password === "string" ? credentials.password : "";
+
+          // Flujo 2FA: cookie con token + código
+          const cookieName = get2FACookieName();
+          const tempToken = getCookieFromRequest(request, cookieName);
+          if (tempToken && code) {
+            const payload = await verify2FAToken(tempToken);
+            if (!payload) throw new CredentialsSignin("Sesión 2FA expirada");
+            const user = await prisma.user.findUnique({
+              where: { id: payload.userId },
+            });
+            if (!user || !user.isActive || user.email !== email) {
+              throw new CredentialsSignin("Credenciales inválidas");
+            }
+            if (!user.totpEnabled || !user.totpSecret) {
+              throw new CredentialsSignin("2FA no configurado");
+            }
+            let secret: string;
+            try {
+              secret = decrypt(user.totpSecret);
+            } catch (decryptErr) {
+              console.error("[auth] decrypt TOTP failed (ENCRYPTION_KEY?):", decryptErr);
+              throw new CredentialsSignin(
+                "Error de configuración del servidor (2FA). Contacte al administrador."
+              );
+            }
+            const result = await verifyTOTP({ secret, token: code });
+            if (!result.valid) throw new CredentialsSignin("Código 2FA incorrecto");
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+            };
           }
-          const secret = decrypt(user.totpSecret);
-          const result = await verifyTOTP({ secret, token: code });
-          if (!result.valid) throw new CredentialsSignin("Código 2FA incorrecto");
+
+          // Flujo email + contraseña
+          const parsed = loginSchema.safeParse({ email, password });
+          if (!parsed.success) {
+            throw new CredentialsSignin("Email y contraseña requeridos");
+          }
+          const user = await prisma.user.findUnique({
+            where: { email: parsed.data.email },
+          });
+          if (!user || !user.isActive) {
+            throw new CredentialsSignin("Credenciales inválidas");
+          }
+          const validPassword = await bcrypt.compare(
+            parsed.data.password,
+            user.passwordHash
+          );
+          if (!validPassword) {
+            throw new CredentialsSignin("Credenciales inválidas");
+          }
+          if (user.totpEnabled) {
+            throw new CredentialsSignin("Requiere código 2FA");
+          }
           return {
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
           };
+        } catch (err) {
+          if (err instanceof CredentialsSignin) throw err;
+          console.error("[auth] authorize error:", err);
+          throw new CredentialsSignin(
+            "Error temporal del servidor. Intente más tarde."
+          );
         }
-
-        // Flujo email + contraseña
-        const parsed = loginSchema.safeParse({ email, password });
-        if (!parsed.success) {
-          throw new CredentialsSignin("Email y contraseña requeridos");
-        }
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email },
-        });
-        if (!user || !user.isActive) {
-          throw new CredentialsSignin("Credenciales inválidas");
-        }
-        const validPassword = await bcrypt.compare(
-          parsed.data.password,
-          user.passwordHash
-        );
-        if (!validPassword) {
-          throw new CredentialsSignin("Credenciales inválidas");
-        }
-        if (user.totpEnabled) {
-          // El cliente debe haber llamado primero a check-2fa y mostrar el input de código
-          throw new CredentialsSignin("Requiere código 2FA");
-        }
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
       },
     }),
   ],

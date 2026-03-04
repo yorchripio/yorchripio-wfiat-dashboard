@@ -34,9 +34,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
-    });
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { email: email.trim().toLowerCase() },
+      });
+    } catch (dbErr) {
+      console.error("[check-2fa] DB error:", dbErr);
+      return NextResponse.json(
+        { success: false, error: "Servicio no disponible. Intente más tarde." },
+        { status: 503 }
+      );
+    }
     if (!user || !user.isActive) {
       return NextResponse.json(
         { success: false, error: "Credenciales inválidas" },
@@ -63,7 +72,23 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    const tempToken = await create2FAToken(user.id);
+    let tempToken: string;
+    try {
+      tempToken = await create2FAToken(user.id);
+    } catch (tokenError) {
+      const msg = tokenError instanceof Error ? tokenError.message : "";
+      if (msg.includes("AUTH_SECRET")) {
+        console.error("[check-2fa] AUTH_SECRET no configurado en el servidor (Vercel → Settings → Environment Variables).");
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Configuración del servidor: falta AUTH_SECRET. Definilo en Vercel → proyecto → Settings → Environment Variables.",
+          },
+          { status: 503 }
+        );
+      }
+      throw tokenError;
+    }
     const cookieName = get2FACookieName();
     const response = NextResponse.json({
       success: true,
