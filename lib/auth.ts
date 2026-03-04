@@ -5,10 +5,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { CredentialsSignin } from "next-auth";
 import bcrypt from "bcryptjs";
-import { verify as verifyTOTP } from "otplib";
 import { prisma } from "@/lib/db";
-import { decrypt } from "@/lib/encryption";
-import { verify2FAToken } from "@/lib/two-factor-token";
 import { loginSchema } from "@/lib/validations/auth";
 
 const authSecret =
@@ -31,8 +28,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        code: { label: "Código 2FA", type: "text" },
-        twoFactorToken: { label: "2FA Token", type: "text" },
       },
       async authorize(credentials) {
         try {
@@ -41,49 +36,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
 
           const email = credentials.email.trim().toLowerCase();
-          const code =
-            typeof credentials.code === "string" ? credentials.code.trim() : "";
           const password =
             typeof credentials.password === "string" ? credentials.password : "";
 
-          const rawToken = (credentials as { twoFactorToken?: string }).twoFactorToken;
-          const tempToken =
-            typeof rawToken === "string" && rawToken.trim().length > 0
-              ? rawToken.trim()
-              : null;
-
-          if (tempToken && code) {
-            const payload = await verify2FAToken(tempToken);
-            if (!payload) throw new CredentialsSignin("Sesión 2FA expirada");
-            const user = await prisma.user.findUnique({
-              where: { id: payload.userId },
-            });
-            if (!user || !user.isActive || (user.email?.toLowerCase() ?? "") !== email) {
-              throw new CredentialsSignin("Credenciales inválidas");
-            }
-            if (!user.totpEnabled || !user.totpSecret) {
-              throw new CredentialsSignin("2FA no configurado");
-            }
-            let secret: string;
-            try {
-              secret = decrypt(user.totpSecret);
-            } catch (decryptErr) {
-              console.error("[auth] decrypt TOTP failed (ENCRYPTION_KEY?):", decryptErr);
-              throw new CredentialsSignin(
-                "Error de configuración del servidor (2FA). Contacte al administrador."
-              );
-            }
-            const result = await verifyTOTP({ secret, token: code });
-            if (!result.valid) throw new CredentialsSignin("Código 2FA incorrecto");
-            return {
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              role: user.role,
-            };
-          }
-
-          // Flujo email + contraseña
           const parsed = loginSchema.safeParse({ email, password });
           if (!parsed.success) {
             throw new CredentialsSignin("Email y contraseña requeridos");

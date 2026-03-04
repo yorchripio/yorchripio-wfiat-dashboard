@@ -93,32 +93,28 @@ function LoginForm(): React.ReactElement {
     setLoading(true);
     try {
       if (!twoFactorToken) {
-        setError("Token de sesión 2FA no disponible. Volvé a ingresar email y contraseña.");
+        setError("Sesión expirada. Volvé a ingresar email y contraseña.");
         setStep("credentials");
         setLoading(false);
         return;
       }
-      const result = await signIn("credentials", {
-        email: email.trim(),
-        code: code.trim(),
-        twoFactorToken,
-        redirect: false,
-        callbackUrl,
+      const res = await fetch("/api/auth/verify-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          code: code.trim(),
+          twoFactorToken,
+        }),
+        credentials: "same-origin",
       });
-      if (result == null) {
-        setError("No se pudo conectar. Intentá de nuevo.");
+      const data = await res.json() as { success?: boolean; error?: string };
+      if (!data.success) {
+        setError(data.error ?? "Código 2FA incorrecto");
         setLoading(false);
         return;
       }
-      if (result.error || !result.ok) {
-        const msg = result.error === "CredentialsSignin"
-          ? "Código 2FA incorrecto o expirado"
-          : result.error ?? "Error al verificar 2FA";
-        setError(msg);
-        setLoading(false);
-        return;
-      }
-      window.location.replace(result.url ?? callbackUrl);
+      window.location.replace(callbackUrl);
     } catch (err) {
       console.error(err);
       setError("Error de conexión");
