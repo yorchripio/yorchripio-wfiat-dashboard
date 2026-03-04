@@ -2,6 +2,7 @@
 // PATCH: actualiza el total (y opcionalmente chains_json) de un supply snapshot. Solo ADMIN.
 
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { hasMinRole } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/db";
@@ -27,7 +28,7 @@ export async function PATCH(
         { status: 401 }
       );
     }
-    const role = session.user.role as "ADMIN" | "VIEWER";
+    const role = session.user.role as "ADMIN" | "TRADER" | "VIEWER";
     if (!hasMinRole(role, "ADMIN")) {
       return NextResponse.json(
         { success: false, error: "Solo ADMIN puede editar snapshots" },
@@ -93,13 +94,9 @@ export async function PATCH(
       if (!Number.isNaN(d.getTime())) snapshotAt = d;
     }
 
-    const updateData: {
-      total: number;
-      chainsJson: Record<string, unknown>;
-      snapshotAt?: Date;
-    } = {
+    const updateData: Prisma.SupplySnapshotUpdateInput = {
       total: newTotal,
-      chainsJson: baseChains as unknown as Record<string, unknown>,
+      chainsJson: baseChains as Prisma.InputJsonValue,
     };
     if (snapshotAt != null && !Number.isNaN(snapshotAt.getTime())) {
       updateData.snapshotAt = snapshotAt;

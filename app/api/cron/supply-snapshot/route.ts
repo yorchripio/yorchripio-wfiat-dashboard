@@ -5,7 +5,7 @@
 // Protegido por CRON_SECRET.
 
 import { NextRequest, NextResponse } from "next/server";
-import { formatInTimeZone, zonedTimeToUtc } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { getTotalSupply } from "@/lib/blockchain/supply";
 import { prisma } from "@/lib/db";
 
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const now = new Date();
     const dateKey = formatInTimeZone(now, TZ_ART, "yyyy-MM-dd");
-    const snapshotAt = zonedTimeToUtc(
+    const snapshotAt = fromZonedTime(
       new Date(dateKey + "T00:00:00"),
       TZ_ART
     );
