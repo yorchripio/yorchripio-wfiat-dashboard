@@ -18,6 +18,7 @@ function LoginForm(): React.ReactElement {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [twoFactorToken, setTwoFactorToken] = useState("");
   const [step, setStep] = useState<"credentials" | "2fa">("credentials");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(
@@ -37,7 +38,7 @@ function LoginForm(): React.ReactElement {
         body: JSON.stringify({ email: email.trim(), password }),
         credentials: "same-origin",
       });
-      let data: { success?: boolean; requires2FA?: boolean; error?: string };
+      let data: { success?: boolean; requires2FA?: boolean; twoFactorToken?: string; error?: string };
       try {
         const text = await res.text();
         data = text ? JSON.parse(text) : {};
@@ -54,6 +55,9 @@ function LoginForm(): React.ReactElement {
       }
 
       if (data.requires2FA) {
+        if (data.twoFactorToken) {
+          setTwoFactorToken(data.twoFactorToken);
+        }
         setStep("2fa");
         setLoading(false);
         return;
@@ -92,6 +96,7 @@ function LoginForm(): React.ReactElement {
       const result = await signIn("credentials", {
         email: email.trim(),
         code: code.trim(),
+        twoFactorToken,
         redirect: false,
         callbackUrl,
       });
@@ -220,7 +225,7 @@ function LoginForm(): React.ReactElement {
                   }}
                   className="w-full text-sm text-[#010103]/60 hover:underline"
                 >
-                  Volver a email y contraseña
+                  Volver
                 </button>
               </form>
             )}

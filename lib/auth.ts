@@ -5,18 +5,11 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { CredentialsSignin } from "next-auth";
 import bcrypt from "bcryptjs";
-import { verify as verifyTOTP, generateSecret, generateURI } from "otplib";
+import { verify as verifyTOTP } from "otplib";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
-import { get2FACookieName, verify2FAToken } from "@/lib/two-factor-token";
+import { verify2FAToken } from "@/lib/two-factor-token";
 import { loginSchema } from "@/lib/validations/auth";
-
-function getCookieFromRequest(request: Request, name: string): string | null {
-  const cookieHeader = request.headers.get("cookie");
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(new RegExp(`${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
 
 // AUTH_SECRET es obligatorio; en desarrollo usamos fallback si no está.
 // Sin secret, Auth.js lanza "There was a problem with the server configuration".
@@ -32,6 +25,25 @@ if (!authSecret) {
   );
 }
 
+// En producción, AUTH_URL debe ser la URL pública para que redirects y cookies funcionen.
+const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
+if (process.env.NODE_ENV === "production" && authUrl) {
+  try {
+    const u = new URL(authUrl);
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") {
+      console.warn(
+        "[auth] AUTH_URL/NEXTAUTH_URL apunta a localhost en producción. En Vercel definí AUTH_URL con la URL pública (ej. https://tu-app.vercel.app)."
+      );
+    }
+  } catch {
+    console.warn("[auth] AUTH_URL/NEXTAUTH_URL inválido en producción. Usá la URL pública completa (ej. https://tu-app.vercel.app).");
+  }
+} else if (process.env.NODE_ENV === "production" && !authUrl) {
+  console.warn(
+    "[auth] En producción no está definido AUTH_URL ni NEXTAUTH_URL. En Vercel → Settings → Environment Variables agregá AUTH_URL con la URL pública (ej. https://tu-app.vercel.app) para que el login y los redirects funcionen."
+  );
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
   providers: [
@@ -40,8 +52,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         code: { label: "Código 2FA", type: "text" },
+        twoFactorToken: { label: "2FA Token", type: "text" },
       },
-      async authorize(credentials, request) {
+      async authorize(credentials) {
         try {
           if (!credentials?.email || typeof credentials.email !== "string") {
             throw new CredentialsSignin("Credenciales inválidas");
@@ -53,14 +66,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const password =
             typeof credentials.password === "string" ? credentials.password : "";
 
-          // Flujo 2FA: token temporal (cookie o inyectado en body por el route handler) + código
-          const cookieName = get2FACookieName();
-          const tempTokenFromCookie = getCookieFromRequest(request, cookieName);
-          const tempTokenFromBody =
+          const tempToken =
             typeof (credentials as { twoFactorToken?: string }).twoFactorToken === "string"
               ? (credentials as { twoFactorToken: string }).twoFactorToken.trim()
               : null;
-          const tempToken = tempTokenFromCookie ?? tempTokenFromBody;
+
           if (tempToken && code) {
             const payload = await verify2FAToken(tempToken);
             if (!payload) throw new CredentialsSignin("Sesión 2FA expirada");

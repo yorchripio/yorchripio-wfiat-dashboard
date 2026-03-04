@@ -1,12 +1,11 @@
 // app/api/auth/check-2fa/route.ts
-// Valida email+password y, si el usuario tiene 2FA, setea cookie temporal y devuelve requires2FA.
-// El cliente debe entonces mostrar el input de código y llamar a signIn("credentials", { email, code }).
+// Valida email+password y, si requiere 2FA, devuelve token JWT temporal en el body.
+// El cliente lo pasa como campo "twoFactorToken" en signIn("credentials", ...).
 
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { create2FAToken } from "@/lib/two-factor-token";
-import { get2FACookieName } from "@/lib/two-factor-token";
 import { loginSchema } from "@/lib/validations/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -95,19 +94,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
       throw tokenError;
     }
-    const cookieName = get2FACookieName();
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       requires2FA: true,
+      twoFactorToken: tempToken,
     });
-    response.cookies.set(cookieName, tempToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 5 * 60, // 5 min
-      path: "/",
-    });
-    return response;
   } catch (e) {
     console.error("[check-2fa]", e);
     return NextResponse.json(
