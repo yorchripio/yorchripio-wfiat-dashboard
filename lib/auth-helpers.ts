@@ -1,11 +1,12 @@
 // lib/auth-helpers.ts
-// Authorization helpers for ADMIN / VIEWER roles
+// Authorization helpers for ADMIN / TRADER / VIEWER roles
 
-export type Role = "ADMIN" | "VIEWER";
+export type Role = "ADMIN" | "TRADER" | "VIEWER";
 
 const ROLE_HIERARCHY: Record<Role, number> = {
   VIEWER: 1,
-  ADMIN: 2,
+  TRADER: 2,
+  ADMIN: 3,
 };
 
 export function hasMinRole(userRole: Role, requiredRole: Role): boolean {

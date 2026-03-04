@@ -62,7 +62,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const user = await prisma.user.findUnique({
               where: { id: payload.userId },
             });
-            if (!user || !user.isActive || user.email !== email) {
+            if (!user || !user.isActive || (user.email?.toLowerCase() ?? "") !== email) {
               throw new CredentialsSignin("Credenciales inválidas");
             }
             if (!user.totpEnabled || !user.totpSecret) {

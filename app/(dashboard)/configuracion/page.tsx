@@ -2,9 +2,22 @@
 
 import { useSession } from "next-auth/react";
 import { useEffect, useState, useCallback } from "react";
-import { User, Shield, Loader2, TrendingUp, RefreshCw } from "lucide-react";
+import { User, Shield, Loader2, TrendingUp, RefreshCw, Users } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { RoleSelect } from "@/components/ui/RoleSelect";
+
+const ADMIN_EMAIL = "admin@ripio.com";
+
+interface UserRow {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  totpEnabled: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
 
 type TwoFAStatus = "idle" | "loading" | "enabled" | "setup";
 
@@ -116,6 +129,99 @@ export default function ConfiguracionPage(): React.ReactElement {
   const [instrumentos, setInstrumentos] = useState<InstrumentoConfigRow[]>([]);
   const [instrumentosLoading, setInstrumentosLoading] = useState(true);
   const [instrumentosToggling, setInstrumentosToggling] = useState<string | null>(null);
+
+  // Panel de usuarios (solo admin@ripio.com)
+  const [usersList, setUsersList] = useState<UserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [createRole, setCreateRole] = useState<"VIEWER" | "TRADER">("VIEWER");
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async (): Promise<void> => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch("/api/auth/users");
+      const json: { success: boolean; data?: UserRow[] } = await res.json();
+      if (json.success && json.data) setUsersList(json.data);
+    } catch {
+      /* ignore */
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.email?.toLowerCase() === ADMIN_EMAIL) {
+      fetchUsers();
+    }
+  }, [session?.user?.email, fetchUsers]);
+
+  const handleCreateUser = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSuccess(false);
+    if (!createEmail.trim() || !createPassword || !createName.trim()) {
+      setCreateError("Email, contraseña y nombre son obligatorios");
+      return;
+    }
+    setCreateLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: createEmail.trim(),
+          password: createPassword,
+          name: createName.trim(),
+          role: createRole,
+        }),
+      });
+      const json: { success?: boolean; error?: string } = await res.json();
+      if (json.success) {
+        setCreateSuccess(true);
+        setCreateEmail("");
+        setCreatePassword("");
+        setCreateName("");
+        setCreateRole("VIEWER");
+        fetchUsers();
+      } else {
+        setCreateError(json.error ?? "Error al crear usuario");
+      }
+    } catch {
+      setCreateError("Error de conexión");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: "VIEWER" | "TRADER"): Promise<void> => {
+    setRoleUpdatingId(userId);
+    try {
+      const res = await fetch(`/api/auth/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const json: { success?: boolean; error?: string } = await res.json();
+      if (json.success) {
+        setUsersList((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+        );
+      } else {
+        setCreateError(json.error ?? "Error al actualizar rol");
+      }
+    } catch {
+      setCreateError("Error de conexión");
+    } finally {
+      setRoleUpdatingId(null);
+    }
+  };
 
   const fetchInstrumentos = useCallback(async (): Promise<void> => {
     try {
@@ -269,6 +375,152 @@ export default function ConfiguracionPage(): React.ReactElement {
             )}
           </CardContent>
         </Card>
+
+        {/* Panel de usuarios (solo admin@ripio.com) */}
+        {session?.user?.email?.toLowerCase() === ADMIN_EMAIL && (
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-[#010103]">
+                <Users className="size-5" />
+                Usuarios
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-sm text-[#010103]/70">
+                Gestioná usuarios: creá nuevos o editá el rol de los existentes.
+              </p>
+
+              {!showCreateForm ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateForm(true);
+                    setCreateError(null);
+                    setCreateSuccess(false);
+                  }}
+                  className="bg-[#5f6e78] hover:bg-[#5f6e78]/90"
+                >
+                  Crear usuario
+                </Button>
+              ) : (
+                <form onSubmit={handleCreateUser} className="space-y-4 rounded-lg border border-[#010103]/10 p-4">
+                  <h3 className="text-sm font-semibold text-[#010103]">Crear usuario</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="user-email" className="block text-sm font-medium text-[#010103] mb-1">Email</label>
+                      <input
+                        id="user-email"
+                        type="email"
+                        value={createEmail}
+                        onChange={(e) => setCreateEmail(e.target.value)}
+                        className="w-full rounded-lg border border-[#010103]/20 px-3 py-2 text-[#010103] focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
+                        placeholder="usuario@ejemplo.com"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="user-password" className="block text-sm font-medium text-[#010103] mb-1">Contraseña</label>
+                      <input
+                        id="user-password"
+                        type="password"
+                        value={createPassword}
+                        onChange={(e) => setCreatePassword(e.target.value)}
+                        className="w-full rounded-lg border border-[#010103]/20 px-3 py-2 text-[#010103] focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="user-name" className="block text-sm font-medium text-[#010103] mb-1">Nombre</label>
+                      <input
+                        id="user-name"
+                        type="text"
+                        value={createName}
+                        onChange={(e) => setCreateName(e.target.value)}
+                        className="w-full rounded-lg border border-[#010103]/20 px-3 py-2 text-[#010103] focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
+                        placeholder="Nombre del usuario"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="user-role" className="block text-sm font-medium text-[#010103] mb-1">Rol</label>
+                      <RoleSelect
+                        value={createRole}
+                        onChange={setCreateRole}
+                        className="w-full max-w-[180px]"
+                      />
+                    </div>
+                  </div>
+                  {createError && <p className="text-sm text-red-600">{createError}</p>}
+                  {createSuccess && <p className="text-sm text-green-600">Usuario creado correctamente.</p>}
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={createLoading} className="bg-[#5f6e78] hover:bg-[#5f6e78]/90">
+                      {createLoading ? <> <Loader2 className="size-4 animate-spin" /> Creando... </> : "Crear usuario"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setCreateError(null);
+                        setCreateSuccess(false);
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              )}
+
+              <div>
+                <h3 className="text-sm font-semibold text-[#010103] mb-2">Usuarios existentes</h3>
+                {usersLoading ? (
+                  <div className="flex items-center gap-2 text-[#010103]/60">
+                    <RefreshCw className="size-4 animate-spin" /> Cargando...
+                  </div>
+                ) : usersList.length === 0 ? (
+                  <p className="text-sm text-[#010103]/50">No hay usuarios.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-[#010103]/10">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#010103]/10 bg-[#010103]/5">
+                          <th className="text-left py-2 px-3 font-medium text-[#010103]">Email</th>
+                          <th className="text-left py-2 px-3 font-medium text-[#010103]">Nombre</th>
+                          <th className="text-left py-2 px-3 font-medium text-[#010103]">Rol</th>
+                          <th className="text-left py-2 px-3 font-medium text-[#010103]">2FA</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usersList.map((u) => (
+                          <tr key={u.id} className="border-b border-[#010103]/5 last:border-0">
+                            <td className="py-2 px-3 text-[#010103]/90">{u.email}</td>
+                            <td className="py-2 px-3 text-[#010103]/90">{u.name}</td>
+                            <td className="py-2 px-3 text-[#010103]/90">
+                              {u.role === "ADMIN" ? (
+                                <div className="flex min-h-[36px] min-w-[120px] items-center rounded-lg border border-[#010103]/15 bg-[#FFFFFF] px-3 py-2 text-sm text-[#010103]">
+                                  Admin
+                                </div>
+                              ) : (
+                                <RoleSelect
+                                  value={u.role as "VIEWER" | "TRADER"}
+                                  onChange={(newRole) => handleRoleChange(u.id, newRole)}
+                                  disabled={roleUpdatingId === u.id}
+                                  compact
+                                  className="min-w-[120px]"
+                                />
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-[#010103]/70">{u.totpEnabled ? "Sí" : "No"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Instrumentos */}
         <Card className="max-w-xl">
           <CardHeader>

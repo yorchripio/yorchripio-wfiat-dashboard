@@ -9,24 +9,17 @@ import { RatioCard } from "@/components/cards/RatioCard";
 import { CollateralChart } from "@/components/cards/CollateralChart";
 import { SupplyChart } from "@/components/cards/SupplyChart";
 import { SupplyDistributionChart } from "@/components/cards/SupplyDistributionChart";
-import { RendimientoCarteraCard } from "@/components/cards/RendimientoCarteraCard";
-import { RendimientosChart } from "@/components/cards/RendimientosChart";
-import { RatioHistoryChart } from "@/components/cards/RatioHistoryChart";
 import { type TotalSupply } from "@/lib/blockchain/supply";
 import { type ColateralData } from "@/lib/sheets/collateral";
-import { type HistoricalDataPoint } from "@/lib/sheets/history";
-import { type RendimientoDiario } from "@/lib/sheets/rendimiento";
 import { RefreshCw } from "lucide-react";
 import { WFIATLogo } from "@/components/ui/WFIATLogo";
+import { TokenSelect } from "@/components/ui/TokenSelect";
 import useSWR from "swr";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DashboardPayload {
   supplyData: TotalSupply;
   collateralData: ColateralData;
-  historicalData: HistoricalDataPoint[];
-  rendimientoData: RendimientoDiario[];
-  tiposQueRinden: string[];
   timestamp: string;
   source: "live" | "snapshot";
   isStale: boolean;
@@ -96,9 +89,6 @@ export default function Dashboard(): React.ReactElement {
 
   const supplyData = dashboardData?.supplyData ?? null;
   const collateralData = dashboardData?.collateralData ?? null;
-  const historicalData = dashboardData?.historicalData ?? [];
-  const rendimientoData = dashboardData?.rendimientoData ?? [];
-  const tiposQueRinden = dashboardData?.tiposQueRinden ?? [];
   const lastUpdate = dashboardData ? formatLastUpdate(dashboardData.timestamp) : "";
   const dataSource = dashboardData?.source ?? "live";
   const isStale = dashboardData?.isStale ?? false;
@@ -131,7 +121,7 @@ export default function Dashboard(): React.ReactElement {
 
   const stablecoins = [
     { id: "wARS", label: "wARS", available: true },
-    { id: "wBRL", label: "wBRL", available: false },
+    { id: "wBRL", label: "wBRL", available: true },
   ];
 
   return (
@@ -145,20 +135,12 @@ export default function Dashboard(): React.ReactElement {
                 <span className="text-3xl font-bold text-[#010103]">wFIAT</span>
               </div>
               <span className="text-[#010103]/30">|</span>
-              <select
+              <TokenSelect
                 value={selectedStable}
-                onChange={(e) => setSelectedStable(e.target.value)}
-                className="text-[#010103] font-medium text-base cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#5f6e78] rounded-lg border border-[#010103]/15 bg-[#FFFFFF] pl-3 pr-8 py-1.5 appearance-none bg-no-repeat bg-[length:1.25rem_1.25rem] bg-[right_0.35rem_center]"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
-                }}
-              >
-                {stablecoins.map((s) => (
-                  <option key={s.id} value={s.id} disabled={!s.available}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+                options={stablecoins}
+                onChange={setSelectedStable}
+                className="w-[180px]"
+              />
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-[#010103]/70">Argentina 🇦🇷</span>
@@ -233,29 +215,16 @@ export default function Dashboard(): React.ReactElement {
                 tokenId={selectedStable}
               />
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <SupplyDistributionChart supplyData={supplyData} tokenId={selectedStable} />
-              <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} />
-            </div>
-            {historicalData.length > 0 && (
-              <RatioHistoryChart
-                historicalData={historicalData}
-                currentRatio={ratio}
-                tokenId={selectedStable}
-              />
-            )}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div>
-                <h2 className="text-lg font-semibold text-[#010103] mb-4">
-                  Supply por Blockchain
-                </h2>
-                <div className="space-y-4">
-                  <SupplyCard data={supplyData.chains.ethereum} />
-                  <SupplyCard data={supplyData.chains.worldchain} />
-                  <SupplyCard data={supplyData.chains.base} />
-                </div>
+            <SupplyDistributionChart supplyData={supplyData} tokenId={selectedStable} />
+            <div>
+              <h2 className="text-lg font-semibold text-[#010103] mb-4">
+                Supply por Blockchain
+              </h2>
+              <div className="space-y-4">
+                <SupplyCard data={supplyData.chains.ethereum} />
+                <SupplyCard data={supplyData.chains.worldchain} />
+                <SupplyCard data={supplyData.chains.base} />
               </div>
-              <RendimientosChart instrumentos={collateralData.instrumentos} tokenId={selectedStable} />
             </div>
           </div>
         )}

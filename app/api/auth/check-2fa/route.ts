@@ -78,11 +78,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     } catch (tokenError) {
       const msg = tokenError instanceof Error ? tokenError.message : "";
       if (msg.includes("AUTH_SECRET")) {
-        console.error("[check-2fa] AUTH_SECRET no configurado en el servidor (Vercel → Settings → Environment Variables).");
+        const isLocal =
+          process.env.NODE_ENV !== "production" ||
+          process.env.VERCEL !== "1";
+        const hint = isLocal
+          ? "Definilo en .env.local (generar con: openssl rand -base64 32)."
+          : "Definilo en Vercel → proyecto → Settings → Environment Variables.";
+        console.error("[check-2fa] AUTH_SECRET no configurado:", hint);
         return NextResponse.json(
           {
             success: false,
-            error: "Configuración del servidor: falta AUTH_SECRET. Definilo en Vercel → proyecto → Settings → Environment Variables.",
+            error: `Configuración del servidor: falta AUTH_SECRET. ${hint}`,
           },
           { status: 503 }
         );

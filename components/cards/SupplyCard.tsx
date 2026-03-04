@@ -6,6 +6,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChainLogo } from "@/components/ui/ChainLogo";
+import { TokenLogo } from "@/components/ui/TokenLogo";
 import { type ChainSupply } from "@/lib/blockchain/supply";
 import { CHAIN_CARD_COLORS } from "@/lib/constants/colors";
 
@@ -38,7 +39,10 @@ export function SupplyCard({ data }: SupplyCardProps) {
       {data.success ? (
         <div>
           <p className="text-3xl font-bold text-[#010103]">{supplyFormatted}</p>
-          <p className="text-sm text-[#010103]/60 mt-1">wARS</p>
+          <div className="flex items-center gap-1.5 mt-1">
+            <TokenLogo tokenId="wARS" size={18} />
+            <p className="text-sm text-[#010103]/60">wARS</p>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-red-600">{data.error}</p>

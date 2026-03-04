@@ -1,13 +1,16 @@
 // app/api/cron/supply-snapshot/route.ts
 // Cron diario: toma snapshot del supply de wARS por chain y lo guarda en la DB.
 // Se ejecuta automáticamente a las 00:00 UTC (21:00 ART) vía Vercel Cron.
+// La fecha del snapshot es "hoy" en hora Buenos Aires (ART) para que coincida con el día local.
 // Protegido por CRON_SECRET.
 
 import { NextRequest, NextResponse } from "next/server";
+import { formatInTimeZone, zonedTimeToUtc } from "date-fns-tz";
 import { getTotalSupply } from "@/lib/blockchain/supply";
 import { prisma } from "@/lib/db";
 
 const ASSET = "wARS";
+const TZ_ART = "America/Argentina/Buenos_Aires";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -37,10 +40,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
-    const dateKey = today.toISOString().slice(0, 10);
+    const now = new Date();
+    const dateKey = formatInTimeZone(now, TZ_ART, "yyyy-MM-dd");
+    const snapshotAt = zonedTimeToUtc(
+      new Date(dateKey + "T00:00:00"),
+      TZ_ART
+    );
     const snapshotId = `cron-${ASSET}-${dateKey}`;
 
     await prisma.supplySnapshot.upsert({
@@ -64,7 +69,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
           source: "cron",
         },
-        snapshotAt: today,
+        snapshotAt,
       },
       update: {
         total: supplyData.total,
@@ -83,6 +88,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
           source: "cron",
         },
+        snapshotAt,
       },
     });
 

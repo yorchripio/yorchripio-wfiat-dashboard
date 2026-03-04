@@ -25,6 +25,7 @@ export const registerSchema = z.object({
   email: z.string().email("Email inválido"),
   password: passwordSchema,
   name: z.string().min(1, "Nombre requerido").max(200),
+  role: z.enum(["VIEWER", "TRADER"]).optional().default("VIEWER"),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

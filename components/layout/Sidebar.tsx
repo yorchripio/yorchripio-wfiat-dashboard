@@ -28,15 +28,15 @@ export function Sidebar(): React.ReactElement {
   const { data: session, status } = useSession();
 
   return (
-    <aside className="flex w-56 flex-col border-r border-[#010103]/10 bg-[#FFFFFF]">
+    <aside className="sticky top-0 flex h-screen w-56 flex-col border-r border-[#010103]/10 bg-[#FFFFFF]">
       {/* Logo / marca */}
-      <div className="flex h-16 items-center gap-2 border-b border-[#010103]/10 px-4">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-[#010103]/10 px-4">
         <WFIATLogo size={32} />
         <span className="font-bold text-[#010103]">wFIAT</span>
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 space-y-0.5 p-3">
+      <nav className="shrink-0 space-y-0.5 p-3">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive =
             href === "/"
@@ -60,8 +60,14 @@ export function Sidebar(): React.ReactElement {
         })}
       </nav>
 
-      {/* Usuario y cerrar sesión */}
-      <div className="border-t border-[#010103]/10 p-3">
+      {/* Espacio entre nav y perfil */}
+      <div className="min-h-[4rem] shrink-0" aria-hidden />
+
+      {/* Espaciador para que el bloque de perfil quede abajo */}
+      <div className="flex-1 min-h-0" aria-hidden />
+
+      {/* Usuario y cerrar sesión — fijo abajo a la izquierda al hacer scroll */}
+      <div className="shrink-0 border-t border-[#010103]/10 p-3">
         {status === "loading" ? (
           <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#010103]/50">
             <User className="size-5 shrink-0" />

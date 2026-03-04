@@ -7,11 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:generate": "prisma generate",
+    "db:generate": "dotenv -e .env.local -- prisma generate",
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "db:seed": "dotenv -e .env.local -- tsx prisma/seed.ts",
     "create-admin": "dotenv -e .env.local -- tsx scripts/create-admin.ts",
+    "correct-supply-feb2026": "dotenv -e .env.local -- tsx scripts/correct-supply-feb2026.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

@@ -16,6 +16,7 @@ import {
   Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TokenLogo } from "@/components/ui/TokenLogo";
 
 type InstrumentoTipo = "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
 
@@ -48,6 +49,15 @@ function formatNum(n: number): string {
 function formatDate(s: string): string {
   const [y, m, d] = s.split("-");
   return `${d}/${m}/${y}`;
+}
+
+/** Fecha de hoy en zona horaria local del navegador (YYYY-MM-DD). Evita que a las 23h ART se muestre el día siguiente por UTC. */
+function getLocalDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /** Parsea número aceptando formato es-AR (1.000,50 o 1.000) o en (1,000.50). Devuelve NaN si no es válido. */
@@ -128,11 +138,25 @@ export default function DataPage(): React.ReactElement {
     success: boolean;
     message: string;
   } | null>(null);
+  const [supplyEditSnapshot, setSupplyEditSnapshot] = useState<SupplySnapshotRow | null>(null);
+  const [supplyEditTotal, setSupplyEditTotal] = useState("");
+  const [supplyEditDate, setSupplyEditDate] = useState("");
+  const [supplyEditEthereum, setSupplyEditEthereum] = useState("");
+  const [supplyEditWorldchain, setSupplyEditWorldchain] = useState("");
+  const [supplyEditBase, setSupplyEditBase] = useState("");
+  const [supplyEditSubmitting, setSupplyEditSubmitting] = useState(false);
+  const [supplyEditError, setSupplyEditError] = useState<string | null>(null);
+  const [supplyDateFrom, setSupplyDateFrom] = useState("");
+  const [supplyDateTo, setSupplyDateTo] = useState("");
+  const [supplyAddOpen, setSupplyAddOpen] = useState(false);
 
   const fetchSupplySnapshots = useCallback(async (): Promise<void> => {
     setSupplySnapshotsLoading(true);
     try {
-      const res = await fetch("/api/supply/snapshots?limit=500");
+      const params = new URLSearchParams({ limit: "500" });
+      if (supplyDateFrom) params.set("from", supplyDateFrom);
+      if (supplyDateTo) params.set("to", supplyDateTo);
+      const res = await fetch(`/api/supply/snapshots?${params.toString()}`);
       const json = await res.json();
       if (json.success) {
         setSupplySnapshots(json.data);
@@ -142,7 +166,7 @@ export default function DataPage(): React.ReactElement {
     } finally {
       setSupplySnapshotsLoading(false);
     }
-  }, []);
+  }, [supplyDateFrom, supplyDateTo]);
 
   const handleImportSupplyFromSheet = async (): Promise<void> => {
     setSupplyImportLoading(true);
@@ -194,6 +218,126 @@ export default function DataPage(): React.ReactElement {
     }
   };
 
+  const chainsFromSnap = (snap: SupplySnapshotRow): { ethereum: number; worldchain: number; base: number } => {
+    const c = snap.chainsJson as Record<string, { supply?: number }>;
+    return {
+      ethereum: c?.ethereum?.supply ?? 0,
+      worldchain: c?.worldchain?.supply ?? 0,
+      base: c?.base?.supply ?? 0,
+    };
+  };
+
+  const openSupplyEdit = (snap: SupplySnapshotRow): void => {
+    setSupplyAddOpen(false);
+    setSupplyEditSnapshot(snap);
+    setSupplyEditTotal(String(snap.total));
+    setSupplyEditDate(snap.snapshotAt.slice(0, 10));
+    const chains = chainsFromSnap(snap);
+    setSupplyEditEthereum(chains.ethereum ? String(chains.ethereum) : "");
+    setSupplyEditWorldchain(chains.worldchain ? String(chains.worldchain) : "");
+    setSupplyEditBase(chains.base ? String(chains.base) : "");
+    setSupplyEditError(null);
+  };
+
+  const openSupplyAdd = (): void => {
+    setSupplyEditSnapshot(null);
+    setSupplyAddOpen(true);
+    setSupplyEditDate(getLocalDateString());
+    setSupplyEditTotal("");
+    setSupplyEditEthereum("");
+    setSupplyEditWorldchain("");
+    setSupplyEditBase("");
+    setSupplyEditError(null);
+  };
+
+  const closeSupplyEdit = (): void => {
+    setSupplyEditSnapshot(null);
+    setSupplyAddOpen(false);
+    setSupplyEditError(null);
+  };
+
+  const handleSupplyEditSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    const total = parseDecimalInput(supplyEditTotal);
+    if (Number.isNaN(total) || total <= 0) {
+      setSupplyEditError("El total debe ser un número mayor a 0 (ej. 568000000).");
+      return;
+    }
+    if (!supplyAddOpen && !supplyEditSnapshot) return;
+    if (supplyAddOpen && !supplyEditDate) {
+      setSupplyEditError("La fecha es obligatoria.");
+      return;
+    }
+    const eth = parseDecimalInput(supplyEditEthereum);
+    const world = parseDecimalInput(supplyEditWorldchain);
+    const base = parseDecimalInput(supplyEditBase);
+    if (!Number.isNaN(eth) && eth < 0) {
+      setSupplyEditError("Ethereum no puede ser negativo.");
+      return;
+    }
+    if (!Number.isNaN(world) && world < 0) {
+      setSupplyEditError("Worldchain no puede ser negativo.");
+      return;
+    }
+    if (!Number.isNaN(base) && base < 0) {
+      setSupplyEditError("Base no puede ser negativo.");
+      return;
+    }
+    setSupplyEditSubmitting(true);
+    setSupplyEditError(null);
+    try {
+      if (supplyAddOpen) {
+        const body = {
+          snapshotAt: supplyEditDate + "T00:00:00.000Z",
+          total,
+          ...(!Number.isNaN(eth) && { ethereumSupply: eth }),
+          ...(!Number.isNaN(world) && { worldchainSupply: world }),
+          ...(!Number.isNaN(base) && { baseSupply: base }),
+        };
+        const res = await fetch("/api/supply/snapshots", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (json.success) {
+          closeSupplyEdit();
+          fetchSupplySnapshots();
+        } else {
+          setSupplyEditError(json.error ?? "Error al crear");
+        }
+      } else if (supplyEditSnapshot) {
+        const body: {
+          total: number;
+          snapshotAt?: string;
+          ethereumSupply?: number;
+          worldchainSupply?: number;
+          baseSupply?: number;
+        } = { total };
+        if (supplyEditDate) body.snapshotAt = supplyEditDate + "T00:00:00.000Z";
+        if (!Number.isNaN(eth)) body.ethereumSupply = eth;
+        if (!Number.isNaN(world)) body.worldchainSupply = world;
+        if (!Number.isNaN(base)) body.baseSupply = base;
+        const res = await fetch(`/api/supply/snapshots/${supplyEditSnapshot.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (json.success) {
+          closeSupplyEdit();
+          fetchSupplySnapshots();
+        } else {
+          setSupplyEditError(json.error ?? "Error al guardar");
+        }
+      }
+    } catch (err) {
+      setSupplyEditError(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setSupplyEditSubmitting(false);
+    }
+  };
+
   const fetchAllocations = useCallback(async (): Promise<void> => {
     setAllocationsLoading(true);
     setAllocationsError(null);
@@ -220,10 +364,8 @@ export default function DataPage(): React.ReactElement {
   }, [fetchAllocations]);
 
   useEffect(() => {
-    if (supplySnapshotsOpen && supplySnapshots.length === 0) {
-      fetchSupplySnapshots();
-    }
-  }, [supplySnapshotsOpen, supplySnapshots.length, fetchSupplySnapshots]);
+    if (supplySnapshotsOpen) fetchSupplySnapshots();
+  }, [supplySnapshotsOpen, supplyDateFrom, supplyDateTo, fetchSupplySnapshots]);
 
   const handleOpenNew = (): void => {
     setEditingId(null);
@@ -378,7 +520,8 @@ export default function DataPage(): React.ReactElement {
               <Activity className="size-8 text-[#5f6e78]" />
               <div>
                 <h2 className="font-semibold text-lg text-[#010103]">Supply Snapshots</h2>
-                <p className="text-sm text-[#010103]/70">
+                <p className="text-sm text-[#010103]/70 flex items-center gap-1.5">
+                  <TokenLogo tokenId="wARS" size={18} />
                   Historial de supply de wARS por chain. Snapshot diario automático a las 00:00 ART.
                 </p>
               </div>
@@ -389,7 +532,43 @@ export default function DataPage(): React.ReactElement {
           </button>
           {supplySnapshotsOpen && (
             <div className="border-t border-[#010103]/10 p-6 pt-4">
+              <div className="flex flex-wrap items-center gap-4 mb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-sm text-[#010103]/70">Desde:</label>
+                  <input
+                    type="date"
+                    value={supplyDateFrom}
+                    onChange={(e) => setSupplyDateFrom(e.target.value)}
+                    className="rounded-lg border border-[#010103]/20 px-3 py-1.5 text-[#010103] text-sm"
+                  />
+                  <label className="text-sm text-[#010103]/70">Hasta:</label>
+                  <input
+                    type="date"
+                    value={supplyDateTo}
+                    onChange={(e) => setSupplyDateTo(e.target.value)}
+                    className="rounded-lg border border-[#010103]/20 px-3 py-1.5 text-[#010103] text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-[#010103]/20"
+                    onClick={() => { setSupplyDateFrom(""); setSupplyDateTo(""); }}
+                  >
+                    Limpiar fechas
+                  </Button>
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-2 mb-4">
+                <Button
+                  type="button"
+                  onClick={openSupplyAdd}
+                  variant="outline"
+                  className="border-[#5f6e78] text-[#5f6e78] hover:bg-[#5f6e78]/10"
+                >
+                  <Plus className="size-4" />
+                  Agregar por fecha
+                </Button>
                 <Button
                   type="button"
                   onClick={handleImportSupplyFromSheet}
@@ -413,7 +592,7 @@ export default function DataPage(): React.ReactElement {
                   {supplyManualLoading ? (
                     <RefreshCw className="size-4 animate-spin" />
                   ) : (
-                    <Plus className="size-4" />
+                    <Activity className="size-4" />
                   )}
                   {supplyManualLoading ? "Tomando snapshot..." : "Snapshot ahora (blockchain)"}
                 </Button>
@@ -464,17 +643,22 @@ export default function DataPage(): React.ReactElement {
                     <thead>
                       <tr className="border-b border-[#010103]/20">
                         <th className="text-left py-2 px-2 text-[#010103]/80">Fecha</th>
-                        <th className="text-right py-2 px-2 text-[#010103]/80">Total wARS</th>
+                        <th className="text-right py-2 px-2 text-[#010103]/80">
+                          <span className="inline-flex items-center gap-1.5 justify-end">
+                            Total <TokenLogo tokenId="wARS" size={16} /> wARS
+                          </span>
+                        </th>
                         <th className="text-right py-2 px-2 text-[#010103]/80">Ethereum</th>
                         <th className="text-right py-2 px-2 text-[#010103]/80">Worldchain</th>
                         <th className="text-right py-2 px-2 text-[#010103]/80">Base</th>
                         <th className="text-left py-2 px-2 text-[#010103]/80">Fuente</th>
+                        <th className="text-left py-2 px-2 text-[#010103]/80 w-20">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {supplySnapshots.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-[#010103]/60">
+                          <td colSpan={7} className="py-8 text-center text-[#010103]/60">
                             No hay snapshots. Importá el histórico del Sheet o tomá un snapshot manual.
                           </td>
                         </tr>
@@ -495,6 +679,18 @@ export default function DataPage(): React.ReactElement {
                               <td className="py-2 px-2 text-[#010103]/60 text-xs">
                                 {source === "sheet-import" ? "Sheet" : source === "cron" ? "Cron" : "Manual"}
                               </td>
+                              <td className="py-2 px-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-[#5f6e78] text-[#5f6e78] hover:bg-[#5f6e78]/10 h-8"
+                                  onClick={() => openSupplyEdit(snap)}
+                                >
+                                  <Pencil className="size-4" />
+                                  Editar
+                                </Button>
+                              </td>
                             </tr>
                           );
                         })
@@ -504,6 +700,105 @@ export default function DataPage(): React.ReactElement {
                   {supplySnapshots.length > 0 && (
                     <p className="text-xs text-[#010103]/50 mt-2">{supplySnapshots.length} snapshots</p>
                   )}
+                </div>
+              )}
+
+              {/* Modal editar supply total */}
+              {(supplyEditSnapshot || supplyAddOpen) && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#010103]/40 p-4" role="dialog" aria-modal="true" aria-labelledby="supply-edit-title">
+                  <div className="bg-[#FFFFFF] rounded-lg border border-[#010103]/10 shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                    <h2 id="supply-edit-title" className="text-lg font-semibold text-[#010103] mb-2">
+                      {supplyAddOpen ? "Agregar snapshot" : "Editar snapshot"}
+                    </h2>
+                    <p className="text-sm text-[#010103]/70 mb-4">
+                      {supplyAddOpen
+                        ? "El gráfico Evolución del ratio de colateralización usa esta data."
+                        : "El gráfico de ratio de colateralización usa estos valores."}
+                    </p>
+                    <form onSubmit={handleSupplyEditSubmit} className="space-y-4">
+                      <div>
+                        <label htmlFor="supply-edit-date" className="block text-sm font-medium text-[#010103] mb-1">
+                          Fecha
+                        </label>
+                        <input
+                          id="supply-edit-date"
+                          type="date"
+                          value={supplyEditDate}
+                          onChange={(e) => setSupplyEditDate(e.target.value)}
+                          className="w-full rounded-lg border border-[#010103]/20 px-3 py-2 text-[#010103] text-sm focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="supply-edit-total" className="block text-sm font-medium text-[#010103] mb-1 flex items-center gap-1.5">
+                          Total <TokenLogo tokenId="wARS" size={18} /> wARS
+                        </label>
+                        <input
+                          id="supply-edit-total"
+                          type="text"
+                          inputMode="decimal"
+                          value={supplyEditTotal}
+                          onChange={(e) => setSupplyEditTotal(e.target.value)}
+                          className="w-full rounded-lg border border-[#010103]/20 px-3 py-2 text-[#010103] text-sm focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label htmlFor="supply-edit-eth" className="block text-sm font-medium text-[#010103] mb-1">Ethereum</label>
+                          <input
+                            id="supply-edit-eth"
+                            type="text"
+                            inputMode="decimal"
+                            value={supplyEditEthereum}
+                            onChange={(e) => setSupplyEditEthereum(e.target.value)}
+                            className="w-full rounded-lg border border-[#010103]/20 px-2 py-1.5 text-[#010103] text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="supply-edit-world" className="block text-sm font-medium text-[#010103] mb-1">Worldchain</label>
+                          <input
+                            id="supply-edit-world"
+                            type="text"
+                            inputMode="decimal"
+                            value={supplyEditWorldchain}
+                            onChange={(e) => setSupplyEditWorldchain(e.target.value)}
+                            className="w-full rounded-lg border border-[#010103]/20 px-2 py-1.5 text-[#010103] text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="supply-edit-base" className="block text-sm font-medium text-[#010103] mb-1">Base</label>
+                          <input
+                            id="supply-edit-base"
+                            type="text"
+                            inputMode="decimal"
+                            value={supplyEditBase}
+                            onChange={(e) => setSupplyEditBase(e.target.value)}
+                            className="w-full rounded-lg border border-[#010103]/20 px-2 py-1.5 text-[#010103] text-sm"
+                          />
+                        </div>
+                      </div>
+                      {supplyEditError && (
+                        <p className="text-sm text-red-600">{supplyEditError}</p>
+                      )}
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-[#010103]/20"
+                          onClick={closeSupplyEdit}
+                          disabled={supplyEditSubmitting}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="bg-[#5f6e78] hover:bg-[#5f6e78]/90"
+                          disabled={supplyEditSubmitting}
+                        >
+                          {supplyEditSubmitting ? "Guardando..." : "Guardar"}
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
             </div>

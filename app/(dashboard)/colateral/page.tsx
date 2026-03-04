@@ -4,14 +4,18 @@ import { useEffect, useState } from "react";
 import { CollateralChart } from "@/components/cards/CollateralChart";
 import { RendimientoCarteraCard } from "@/components/cards/RendimientoCarteraCard";
 import { RendimientosChart } from "@/components/cards/RendimientosChart";
+import { RatioHistoryChart } from "@/components/cards/RatioHistoryChart";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { type RendimientoDiario } from "@/lib/sheets/rendimiento";
+import { type HistoricalDataPoint } from "@/lib/sheets/history";
 import { RefreshCw } from "lucide-react";
 
 export default function ColateralPage(): React.ReactElement {
   const [collateralData, setCollateralData] = useState<ColateralData | null>(null);
   const [rendimientoData, setRendimientoData] = useState<RendimientoDiario[]>([]);
   const [tiposQueRinden, setTiposQueRinden] = useState<string[]>([]);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
+  const [supplyTotal, setSupplyTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,19 +23,29 @@ export default function ColateralPage(): React.ReactElement {
     setLoading(true);
     setError(null);
     try {
-      const [collateralRes, rendimientoRes] = await Promise.all([
+      const [collateralRes, rendimientoRes, historyRes, supplyRes] = await Promise.all([
         fetch("/api/collateral"),
         fetch("/api/rendimiento"),
+        fetch("/api/history"),
+        fetch("/api/supply"),
       ]);
       const collateralResult = await collateralRes.json();
       const rendimientoResult = await rendimientoRes.json();
+      const historyResult = await historyRes.json();
+      const supplyResult = await supplyRes.json();
       if (collateralResult.success) setCollateralData(collateralResult.data);
       else setError(collateralResult.error ?? "Error al cargar colateral");
       if (rendimientoResult.success) {
-        setRendimientoData(rendimientoResult.data);
+        setRendimientoData(rendimientoResult.data ?? []);
         if (Array.isArray(rendimientoResult.tiposQueRinden)) {
           setTiposQueRinden(rendimientoResult.tiposQueRinden);
         }
+      }
+      if (historyResult.success && Array.isArray(historyResult.data)) {
+        setHistoricalData(historyResult.data);
+      }
+      if (supplyResult.success && supplyResult.data?.total != null) {
+        setSupplyTotal(supplyResult.data.total);
       }
     } catch (err) {
       setError("Error de conexión");
@@ -69,14 +83,26 @@ export default function ColateralPage(): React.ReactElement {
           </div>
         ) : collateralData ? (
           <div className="space-y-8">
+            <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} />
+            {historicalData.length > 0 && (
+              <RatioHistoryChart
+                historicalData={historicalData}
+                currentRatio={
+                  supplyTotal > 0 && collateralData
+                    ? (collateralData.total / supplyTotal) * 100
+                    : 0
+                }
+                tokenId="wARS"
+              />
+            )}
+            <RendimientosChart instrumentos={collateralData.instrumentos} tokenId="wARS" />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <CollateralChart
                 instrumentos={collateralData.instrumentos}
                 total={collateralData.total}
+                tokenId="wARS"
               />
-              <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} />
             </div>
-            <RendimientosChart instrumentos={collateralData.instrumentos} />
             <div className="flex justify-end">
               <button
                 type="button"

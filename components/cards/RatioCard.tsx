@@ -5,6 +5,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TokenLogo } from "@/components/ui/TokenLogo";
 import { getChartColorForToken } from "@/lib/constants/colors";
 
 interface RatioCardProps {
@@ -136,9 +137,12 @@ export function RatioCard({
         <div className="flex-1 space-y-4 md:text-right">
           <div>
             <p className="text-sm text-[#010103]/60">Supply Total</p>
-            <p className="text-xl font-semibold text-[#010103]">
-              {formatNumber(supplyTotal)} wARS
-            </p>
+            <div className="flex items-center gap-2 justify-end md:justify-end">
+              <TokenLogo tokenId={tokenId} size={22} />
+              <p className="text-xl font-semibold text-[#010103]">
+                {formatNumber(supplyTotal)} {tokenId}
+              </p>
+            </div>
           </div>
 
           <div>

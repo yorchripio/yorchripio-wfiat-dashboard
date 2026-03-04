@@ -1,5 +1,6 @@
 // app/api/auth/register/route.ts
-// Crear usuario (solo ADMIN). Body: { email, password, name, role?: "ADMIN" | "VIEWER" }
+// Crear usuario (solo admin@ripio.com). Body: { email, password, name, role?: "VIEWER" | "TRADER" }
+// Nuevos usuarios por defecto VIEWER; TRADER puede agregar líneas al colateral.
 
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
@@ -9,6 +10,7 @@ import { registerSchema } from "@/lib/validations/auth";
 import { hasMinRole } from "@/lib/auth-helpers";
 
 const BCRYPT_ROUNDS = 12;
+const ADMIN_EMAIL = "admin@ripio.com";
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -19,10 +21,16 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 401 }
       );
     }
-    const role = session.user.role as "ADMIN" | "VIEWER";
+    const role = session.user.role as "ADMIN" | "TRADER" | "VIEWER";
     if (!hasMinRole(role, "ADMIN")) {
       return NextResponse.json(
         { success: false, error: "Solo un ADMIN puede crear usuarios" },
+        { status: 403 }
+      );
+    }
+    if (session.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+      return NextResponse.json(
+        { success: false, error: "Solo el perfil admin@ripio.com puede gestionar usuarios" },
         { status: 403 }
       );
     }
@@ -37,7 +45,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const { email, password, name } = parsed.data;
+    const { email, password, name, role: newRoleInput } = parsed.data;
     const emailLower = email.trim().toLowerCase();
 
     const existing = await prisma.user.findUnique({
@@ -51,9 +59,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const newRole = (body.role === "ADMIN" ? "ADMIN" : "VIEWER") as
-      | "ADMIN"
-      | "VIEWER";
+    const newRole = newRoleInput === "TRADER" ? "TRADER" : "VIEWER";
 
     await prisma.user.create({
       data: {

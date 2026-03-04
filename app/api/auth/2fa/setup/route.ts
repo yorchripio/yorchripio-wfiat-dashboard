@@ -68,7 +68,25 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const encryptedSecret = encrypt(secret);
+    let encryptedSecret: string;
+    try {
+      encryptedSecret = encrypt(secret);
+    } catch (encErr) {
+      const msg = encErr instanceof Error ? encErr.message : String(encErr);
+      console.error("[2fa setup POST] encrypt failed:", msg);
+      if (msg.includes("ENCRYPTION_KEY")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Falta configurar la clave de cifrado. El administrador debe agregar ENCRYPTION_KEY en las variables de entorno (openssl rand -hex 32).",
+          },
+          { status: 503 }
+        );
+      }
+      throw encErr;
+    }
+
     await prisma.user.update({
       where: { id: session.user.id },
       data: { totpSecret: encryptedSecret, totpEnabled: true },
@@ -77,8 +95,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error("[2fa setup POST]", e);
+    const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { success: false, error: "Error al activar 2FA" },
+      {
+        success: false,
+        error: message.includes("ENCRYPTION_KEY")
+          ? "Falta configurar ENCRYPTION_KEY. Contactá al administrador."
+          : "Error al activar 2FA",
+      },
       { status: 500 }
     );
   }

@@ -118,10 +118,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 401 }
       );
     }
-    const role = session.user.role as "ADMIN" | "VIEWER";
-    if (!hasMinRole(role, "ADMIN")) {
+    const role = session.user.role as "ADMIN" | "TRADER" | "VIEWER";
+    if (!hasMinRole(role, "TRADER")) {
       return NextResponse.json(
-        { success: false, error: "Solo ADMIN puede crear allocations" },
+        { success: false, error: "Solo TRADER o ADMIN puede agregar líneas al colateral" },
         { status: 403 }
       );
     }

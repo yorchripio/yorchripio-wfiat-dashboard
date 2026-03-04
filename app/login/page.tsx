@@ -63,17 +63,20 @@ function LoginForm(): React.ReactElement {
         email: email.trim(),
         password,
         redirect: false,
+        callbackUrl,
       });
-      if (result?.error) {
+      if (result == null) {
+        setError("No se pudo conectar. Intentá de nuevo.");
+        setLoading(false);
+        return;
+      }
+      if (result.error) {
         setError("Credenciales inválidas");
         setLoading(false);
         return;
       }
-      if (result?.url) {
-        window.location.href = result.url;
-        return;
-      }
-      window.location.href = callbackUrl;
+      const url = result.url ?? callbackUrl;
+      window.location.replace(url);
     } catch (err) {
       console.error(err);
       setError("Error de conexión");
@@ -90,17 +93,20 @@ function LoginForm(): React.ReactElement {
         email: email.trim(),
         code: code.trim(),
         redirect: false,
+        callbackUrl,
       });
-      if (result?.error) {
+      if (result == null) {
+        setError("No se pudo conectar. Intentá de nuevo.");
+        setLoading(false);
+        return;
+      }
+      if (result.error) {
         setError(result.error === "CredentialsSignin" ? "Código 2FA incorrecto o expirado" : result.error);
         setLoading(false);
         return;
       }
-      if (result?.url) {
-        window.location.href = result.url;
-        return;
-      }
-      window.location.href = callbackUrl;
+      const url = result.url ?? callbackUrl;
+      window.location.replace(url);
     } catch (err) {
       console.error(err);
       setError("Error de conexión");
