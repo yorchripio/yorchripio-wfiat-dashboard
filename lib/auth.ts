@@ -53,9 +53,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const password =
             typeof credentials.password === "string" ? credentials.password : "";
 
-          // Flujo 2FA: cookie con token + código
+          // Flujo 2FA: token temporal (cookie o inyectado en body por el route handler) + código
           const cookieName = get2FACookieName();
-          const tempToken = getCookieFromRequest(request, cookieName);
+          const tempTokenFromCookie = getCookieFromRequest(request, cookieName);
+          const tempTokenFromBody =
+            typeof (credentials as { twoFactorToken?: string }).twoFactorToken === "string"
+              ? (credentials as { twoFactorToken: string }).twoFactorToken.trim()
+              : null;
+          const tempToken = tempTokenFromCookie ?? tempTokenFromBody;
           if (tempToken && code) {
             const payload = await verify2FAToken(tempToken);
             if (!payload) throw new CredentialsSignin("Sesión 2FA expirada");
