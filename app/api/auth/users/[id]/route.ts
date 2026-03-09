@@ -1,18 +1,24 @@
 // app/api/auth/users/[id]/route.ts
-// PATCH: actualizar rol del usuario (solo admin@ripio.com). Body: { role: "VIEWER" | "TRADER" }
+// PATCH: actualizar rol del usuario (solo el email configurado en ADMIN_EMAIL). Body: { role: "VIEWER" | "TRADER" }
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { hasMinRole } from "@/lib/auth-helpers";
 
-const ADMIN_EMAIL = "admin@ripio.com";
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    if (!adminEmail) {
+      return NextResponse.json(
+        { success: false, error: "Error de configuración del servidor" },
+        { status: 503 }
+      );
+    }
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -27,9 +33,9 @@ export async function PATCH(
         { status: 403 }
       );
     }
-    if (session.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+    if (session.user.email?.toLowerCase() !== adminEmail) {
       return NextResponse.json(
-        { success: false, error: "Solo el perfil admin@ripio.com puede gestionar usuarios" },
+        { success: false, error: "Sin permisos para gestionar usuarios" },
         { status: 403 }
       );
     }

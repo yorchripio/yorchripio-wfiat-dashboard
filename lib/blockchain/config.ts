@@ -19,16 +19,16 @@ function parseRpcUrls(primary: string | undefined, fallbacks: string | undefined
 }
 
 const ethereumRpcUrls = parseRpcUrls(
-  process.env.NEXT_PUBLIC_ETHEREUM_RPC,
-  process.env.NEXT_PUBLIC_ETHEREUM_RPCS
+  process.env.ETHEREUM_RPC,
+  process.env.ETHEREUM_RPCS
 );
 const worldchainRpcUrls = parseRpcUrls(
-  process.env.NEXT_PUBLIC_WORLDCHAIN_RPC,
-  process.env.NEXT_PUBLIC_WORLDCHAIN_RPCS
+  process.env.WORLDCHAIN_RPC,
+  process.env.WORLDCHAIN_RPCS
 );
 const baseRpcUrls = parseRpcUrls(
-  process.env.NEXT_PUBLIC_BASE_RPC,
-  process.env.NEXT_PUBLIC_BASE_RPCS
+  process.env.BASE_RPC,
+  process.env.BASE_RPCS
 );
 
 export const CHAINS = {

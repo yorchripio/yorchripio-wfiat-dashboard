@@ -55,7 +55,7 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al guardar",
+        error: "Error al guardar snapshot",
       },
       { status: 500 }
     );

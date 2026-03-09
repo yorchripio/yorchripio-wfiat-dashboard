@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RoleSelect } from "@/components/ui/RoleSelect";
 
-const ADMIN_EMAIL = "admin@ripio.com";
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() ?? null;
 
 interface UserRow {
   id: string;

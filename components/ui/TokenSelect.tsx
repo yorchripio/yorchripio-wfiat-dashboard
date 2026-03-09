@@ -9,6 +9,8 @@ export interface TokenOption {
   id: string;
   label: string;
   available: boolean;
+  /** Si está definido y available es false, la opción se muestra deshabilitada (gris) con este texto en cursiva. */
+  disabledLabel?: string;
 }
 
 interface TokenSelectProps {
@@ -49,6 +51,7 @@ export function TokenSelect({
 
   const selected = options.find((o) => o.id === value);
   const availableOptions = options.filter((o) => o.available);
+  const visibleOptions = options.filter((o) => o.available || o.disabledLabel);
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
@@ -79,25 +82,43 @@ export function TokenSelect({
           role="listbox"
           className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border border-[#010103]/15 bg-[#FFFFFF] shadow-lg py-1 min-w-[180px] max-h-[280px] overflow-auto"
         >
-          {availableOptions.map((opt) => (
-            <li key={opt.id} role="option" aria-selected={opt.id === value}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(opt.id);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-2.5 text-left text-[#010103] font-medium text-base",
-                  "hover:bg-[#010103]/5 focus:bg-[#010103]/5 focus:outline-none",
-                  opt.id === value && "bg-[#006bb7]/10 text-[#006bb7]"
+          {visibleOptions.map((opt) => {
+            const isDisabled = !opt.available && opt.disabledLabel;
+            return (
+              <li key={opt.id} role="option" aria-selected={opt.id === value} aria-disabled={isDisabled}>
+                {isDisabled ? (
+                  <div
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2.5 text-left font-medium text-base",
+                      "text-[#010103]/50 cursor-not-allowed"
+                    )}
+                  >
+                    <TokenLogo tokenId={opt.id} size={24} className="flex-shrink-0 opacity-60" />
+                    <span>{opt.label}</span>
+                    {opt.disabledLabel && (
+                      <span className="italic text-[#010103]/50 ml-0.5">{opt.disabledLabel}</span>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.id);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2.5 text-left text-[#010103] font-medium text-base",
+                      "hover:bg-[#010103]/5 focus:bg-[#010103]/5 focus:outline-none",
+                      opt.id === value && "bg-[#006bb7]/10 text-[#006bb7]"
+                    )}
+                  >
+                    <TokenLogo tokenId={opt.id} size={24} className="flex-shrink-0" />
+                    <span>{opt.label}</span>
+                  </button>
                 )}
-              >
-                <TokenLogo tokenId={opt.id} size={24} className="flex-shrink-0" />
-                <span>{opt.label}</span>
-              </button>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

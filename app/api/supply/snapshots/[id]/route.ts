@@ -122,7 +122,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al actualizar",
+        error: "Error al actualizar snapshot",
       },
       { status: 500 }
     );

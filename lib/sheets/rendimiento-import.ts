@@ -99,10 +99,11 @@ export async function getRendimientoFromSheet(): Promise<RendimientoDiarioSheet[
     result.push({ fecha, rendimiento });
   }
 
-  console.log(`[RendimientoImport] ${result.length} puntos leídos del Sheet`);
-  if (result.length > 0) {
-    console.log(`[RendimientoImport] Rango: ${result[0].fecha.toISOString().slice(0, 10)} → ${result[result.length - 1].fecha.toISOString().slice(0, 10)}`);
-    console.log(`[RendimientoImport] Primeros 5:`, result.slice(0, 5).map(r => `${r.fecha.toISOString().slice(0, 10)}: ${r.rendimiento}%`));
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[RendimientoImport] ${result.length} puntos leídos del Sheet`);
+    if (result.length > 0) {
+      console.log(`[RendimientoImport] Rango: ${result[0].fecha.toISOString().slice(0, 10)} → ${result[result.length - 1].fecha.toISOString().slice(0, 10)}`);
+    }
   }
 
   return result;

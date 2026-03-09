@@ -12,14 +12,16 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (path.startsWith("/api/auth")) return NextResponse.next();
 
   const isSecure = request.nextUrl.protocol === "https:";
+
+  if (!process.env.AUTH_SECRET) {
+    console.error("[proxy] AUTH_SECRET no está definido");
+    return NextResponse.json({ success: false, error: "Error de configuración del servidor" }, { status: 500 });
+  }
+
   const token = await getToken({
     req: request,
     secureCookie: isSecure,
-    secret:
-      process.env.AUTH_SECRET ||
-      (process.env.NODE_ENV === "development"
-        ? "wfiat-dev-secret-cambiar-en-produccion"
-        : undefined),
+    secret: process.env.AUTH_SECRET,
   });
 
   if (token) return NextResponse.next();

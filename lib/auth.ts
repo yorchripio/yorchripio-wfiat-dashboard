@@ -8,15 +8,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { loginSchema } from "@/lib/validations/auth";
 
-const authSecret =
-  process.env.AUTH_SECRET ||
-  (process.env.NODE_ENV === "development"
-    ? "wfiat-dev-secret-cambiar-en-produccion"
-    : "");
+const authSecret = process.env.AUTH_SECRET;
 
 if (!authSecret) {
   throw new Error(
-    "AUTH_SECRET no está definido. En .env.local (local) o en Variables de Entorno (Vercel) agregá: AUTH_SECRET. Generar con: openssl rand -base64 32"
+    "AUTH_SECRET no está definido. Agregalo en .env.local (local) o en Variables de Entorno (Vercel). Generar con: openssl rand -base64 32"
   );
 }
 
@@ -77,8 +73,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: {
     strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24 horas
-    updateAge: 8 * 60 * 60, // refrescar si inactivo > 8h
+    maxAge: 60 * 60, // 1 hora
+    updateAge: 30 * 60, // refrescar si inactivo > 30 min
   },
   callbacks: {
     jwt({ token, user }) {

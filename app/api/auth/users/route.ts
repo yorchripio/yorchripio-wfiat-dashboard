@@ -1,15 +1,21 @@
 // app/api/auth/users/route.ts
-// GET: listar usuarios (solo admin@ripio.com). No expone password ni secretos.
+// GET: listar usuarios (solo el email configurado en ADMIN_EMAIL). No expone password ni secretos.
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { hasMinRole } from "@/lib/auth-helpers";
 
-const ADMIN_EMAIL = "admin@ripio.com";
-
 export async function GET(): Promise<NextResponse> {
   try {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    if (!adminEmail) {
+      return NextResponse.json(
+        { success: false, error: "Error de configuración del servidor" },
+        { status: 503 }
+      );
+    }
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -24,9 +30,9 @@ export async function GET(): Promise<NextResponse> {
         { status: 403 }
       );
     }
-    if (session.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+    if (session.user.email?.toLowerCase() !== adminEmail) {
       return NextResponse.json(
-        { success: false, error: "Solo el perfil admin@ripio.com puede gestionar usuarios" },
+        { success: false, error: "Sin permisos para gestionar usuarios" },
         { status: 403 }
       );
     }

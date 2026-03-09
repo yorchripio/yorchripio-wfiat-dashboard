@@ -27,7 +27,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al cargar histórico",
+        error: "Error al cargar histórico",
       },
       { status: 500 }
     );

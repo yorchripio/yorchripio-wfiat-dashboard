@@ -9,7 +9,7 @@
   - `DIRECT_URL` (sin pgbouncer, para migraciones)
   - `AUTH_SECRET`, `AUTH_URL` (tu URL de producción, ej. `https://tu-dominio.vercel.app`)
   - `ENCRYPTION_KEY` (2FA)
-  - `NEXT_PUBLIC_ETHEREUM_RPC`, `NEXT_PUBLIC_WORLDCHAIN_RPC`, `NEXT_PUBLIC_BASE_RPC` (y opcionalmente `*_RPCS` para fallback)
+  - `ETHEREUM_RPC`, `WORLDCHAIN_RPC`, `BASE_RPC` (y opcionalmente `*_RPCS` para fallback)
   - **`CRON_SECRET`**: generar con `openssl rand -base64 32` y configurarlo en Vercel (necesario para que el cron de supply-snapshot no devuelva 401).
   - Las de Google Sheets si las usás; las de Supabase son obligatorias.
 - [ ] **Migraciones**: si hay cambios en Prisma desde el último deploy, ejecutar migraciones contra la DB de producción (desde local con `DIRECT_URL` de prod, o desde un job/script seguro).

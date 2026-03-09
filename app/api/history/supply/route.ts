@@ -2,10 +2,15 @@
 // GET: historial de supply desde la DB (para wARS u otro asset vía query)
 
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getSupplyHistory } from "@/lib/db/snapshots";
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const asset = searchParams.get("asset") ?? "wARS";
     const limit = Math.min(
@@ -20,7 +25,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al leer historial",
+        error: "Error al leer historial",
       },
       { status: 500 }
     );

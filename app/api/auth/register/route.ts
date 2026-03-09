@@ -1,5 +1,5 @@
 // app/api/auth/register/route.ts
-// Crear usuario (solo admin@ripio.com). Body: { email, password, name, role?: "VIEWER" | "TRADER" }
+// Crear usuario (solo el email configurado en ADMIN_EMAIL). Body: { email, password, name, role?: "VIEWER" | "TRADER" }
 // Nuevos usuarios por defecto VIEWER; TRADER puede agregar líneas al colateral.
 
 import { NextResponse } from "next/server";
@@ -10,10 +10,17 @@ import { registerSchema } from "@/lib/validations/auth";
 import { hasMinRole } from "@/lib/auth-helpers";
 
 const BCRYPT_ROUNDS = 12;
-const ADMIN_EMAIL = "admin@ripio.com";
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    if (!adminEmail) {
+      return NextResponse.json(
+        { success: false, error: "Error de configuración del servidor" },
+        { status: 503 }
+      );
+    }
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -28,9 +35,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 403 }
       );
     }
-    if (session.user.email?.toLowerCase() !== ADMIN_EMAIL) {
+    if (session.user.email?.toLowerCase() !== adminEmail) {
       return NextResponse.json(
-        { success: false, error: "Solo el perfil admin@ripio.com puede gestionar usuarios" },
+        { success: false, error: "Sin permisos para gestionar usuarios" },
         { status: 403 }
       );
     }

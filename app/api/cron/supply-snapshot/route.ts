@@ -17,7 +17,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+      console.error("[cron/supply-snapshot] CRON_SECRET no definido");
+      return NextResponse.json(
+        { success: false, error: "Error de configuración del servidor" },
+        { status: 500 }
+      );
+    }
+
+    if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json(
         { success: false, error: "No autorizado" },
         { status: 401 }
@@ -109,7 +117,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error desconocido",
+        error: "Error interno del servidor",
       },
       { status: 500 }
     );

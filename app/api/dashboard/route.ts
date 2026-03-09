@@ -2,6 +2,7 @@
 // Endpoint agregado para cargar todo el dashboard en un solo request.
 
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getTotalSupply } from "@/lib/blockchain/supply";
 import { getCollateralDataFromDB } from "@/lib/db/collateral";
 import { getHistoricalDataFromDB } from "@/lib/db/history";
@@ -20,6 +21,11 @@ interface DashboardPayload {
 
 export async function GET(): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
+
     const [supplyData, collateralData, rendimiento] = await Promise.all([
       getTotalSupply(),
       getCollateralDataFromDB(),
@@ -72,7 +78,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al cargar dashboard",
+        error: "Error al cargar dashboard",
       },
       { status: 500 }
     );

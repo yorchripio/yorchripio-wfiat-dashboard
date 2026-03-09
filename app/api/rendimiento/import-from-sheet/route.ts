@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { hasMinRole, type Role } from "@/lib/auth-helpers";
 import { getRendimientoFromSheet } from "@/lib/sheets/rendimiento-import";
 
 const DEFAULT_ASSET = "wARS";
 
 export async function POST(): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
+    const role = (session.user.role as Role) ?? "VIEWER";
+    if (!hasMinRole(role, "ADMIN")) {
+      return NextResponse.json({ success: false, error: "Sin permisos" }, { status: 403 });
+    }
     const sheetData = await getRendimientoFromSheet();
 
     let created = 0;

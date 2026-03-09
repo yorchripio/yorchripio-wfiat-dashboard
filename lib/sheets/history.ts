@@ -170,13 +170,16 @@ export async function getHistoricalData(): Promise<HistoricalDataPoint[]> {
     const collateralDatesRow = collateralRows[2] || [];
     const collateralTotalsRow = collateralRows[7] || [];
 
-    console.log("[History] === DIAGNÓSTICO ===");
-    console.log("[History] Cols fechas colateral:", collateralDatesRow.length);
-    console.log("[History] Cols fechas supply:", supplyDatesRow.length);
-    console.log("[History] Primeras 5 fechas colateral (raw):", JSON.stringify(collateralDatesRow.slice(0, 5)));
-    console.log("[History] Primeras 5 fechas supply (raw):", JSON.stringify(supplyDatesRow.slice(0, 5)));
-    console.log("[History] Primeros 5 totales colateral (raw):", JSON.stringify(collateralTotalsRow.slice(0, 5)));
-    console.log("[History] Primeros 5 valores supply (raw):", JSON.stringify(supplyValuesRow.slice(0, 5)));
+    const isDev = process.env.NODE_ENV !== "production";
+    if (isDev) {
+      console.log("[History] === DIAGNÓSTICO ===");
+      console.log("[History] Cols fechas colateral:", collateralDatesRow.length);
+      console.log("[History] Cols fechas supply:", supplyDatesRow.length);
+      console.log("[History] Primeras 5 fechas colateral (raw):", JSON.stringify(collateralDatesRow.slice(0, 5)));
+      console.log("[History] Primeras 5 fechas supply (raw):", JSON.stringify(supplyDatesRow.slice(0, 5)));
+      console.log("[History] Primeros 5 totales colateral (raw):", JSON.stringify(collateralTotalsRow.slice(0, 5)));
+      console.log("[History] Primeros 5 valores supply (raw):", JSON.stringify(supplyValuesRow.slice(0, 5)));
+    }
 
     // Mapa: dateKey ("YYYY-MM-DD") -> datos
     const dataMap = new Map<
@@ -218,8 +221,10 @@ export async function getHistoricalData(): Promise<HistoricalDataPoint[]> {
       }
     }
 
-    console.log(`[History] Colateral: ${colateralParsed} fechas parseadas, ${colateralFailed} fallidas`);
-    console.log(`[History] Colateral: ${dataMap.size} entradas con total > 0`);
+    if (isDev) {
+      console.log(`[History] Colateral: ${colateralParsed} fechas parseadas, ${colateralFailed} fallidas`);
+      console.log(`[History] Colateral: ${dataMap.size} entradas con total > 0`);
+    }
 
     // === Procesar datos del supply ===
     let supplyParsed = 0;
@@ -260,8 +265,10 @@ export async function getHistoricalData(): Promise<HistoricalDataPoint[]> {
       }
     }
 
-    console.log(`[History] Supply: ${supplyParsed} fechas parseadas, ${supplyFailed} fallidas`);
-    console.log(`[History] Supply: ${supplyMatched} matcheadas con colateral, ${supplyUnmatched} sin match`);
+    if (isDev) {
+      console.log(`[History] Supply: ${supplyParsed} fechas parseadas, ${supplyFailed} fallidas`);
+      console.log(`[History] Supply: ${supplyMatched} matcheadas con colateral, ${supplyUnmatched} sin match`);
+    }
 
     // === Construir resultado ===
     const historicalData: HistoricalDataPoint[] = [];
@@ -283,16 +290,16 @@ export async function getHistoricalData(): Promise<HistoricalDataPoint[]> {
     // Ordenar por dateKey (YYYY-MM-DD ordena cronológicamente como string)
     historicalData.sort((a, b) => a.timestamp - b.timestamp);
 
-    console.log(`[History] Puntos finales con ambos datos: ${historicalData.length}`);
-    if (historicalData.length > 0) {
-      console.log(`[History] Primera fecha: ${historicalData[0].fecha}`);
-      console.log(`[History] Última fecha: ${historicalData[historicalData.length - 1].fecha}`);
+    if (isDev) {
+      console.log(`[History] Puntos finales con ambos datos: ${historicalData.length}`);
+      if (historicalData.length > 0) {
+        console.log(`[History] Primera fecha: ${historicalData[0].fecha}`);
+        console.log(`[History] Última fecha: ${historicalData[historicalData.length - 1].fecha}`);
+      }
+      const allKeys = Array.from(dataMap.keys()).sort();
+      console.log(`[History] Primeras 10 dateKeys:`, allKeys.slice(0, 10));
+      console.log(`[History] Últimas 5 dateKeys:`, allKeys.slice(-5));
     }
-
-    // Listar las primeras 10 dateKeys para debug
-    const allKeys = Array.from(dataMap.keys()).sort();
-    console.log(`[History] Primeras 10 dateKeys:`, allKeys.slice(0, 10));
-    console.log(`[History] Últimas 5 dateKeys:`, allKeys.slice(-5));
 
     return historicalData;
   } catch (error) {

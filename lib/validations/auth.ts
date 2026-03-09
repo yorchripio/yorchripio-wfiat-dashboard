@@ -28,6 +28,13 @@ export const registerSchema = z.object({
   role: z.enum(["VIEWER", "TRADER"]).optional().default("VIEWER"),
 });
 
+export const verify2FASchema = z.object({
+  email: z.string().email("Email inválido").transform((v) => v.trim().toLowerCase()),
+  code: z.string().length(6, "El código debe tener 6 dígitos").regex(/^\d{6}$/, "Solo dígitos"),
+  twoFactorToken: z.string().min(1, "Token requerido"),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TwoFactorInput = z.infer<typeof twoFactorSchema>;
+export type Verify2FAInput = z.infer<typeof verify2FASchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;

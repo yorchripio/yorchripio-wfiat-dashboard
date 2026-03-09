@@ -121,7 +121,7 @@ export default function Dashboard(): React.ReactElement {
 
   const stablecoins = [
     { id: "wARS", label: "wARS", available: true },
-    { id: "wBRL", label: "wBRL", available: true },
+    { id: "wBRL", label: "wBRL", available: false, disabledLabel: "(v2.1)" },
   ];
 
   return (

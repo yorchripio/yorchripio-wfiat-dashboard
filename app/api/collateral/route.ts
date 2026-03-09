@@ -3,10 +3,15 @@
 // Misma forma que antes (ColateralData) para el dashboard y página Colateral.
 
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getCollateralDataFromDB } from "@/lib/db/collateral";
 
 export async function GET(): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
     const collateralData = await getCollateralDataFromDB();
     if (!collateralData) {
       return NextResponse.json(
@@ -26,7 +31,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al cargar colateral",
+        error: "Error al cargar colateral",
       },
       { status: 500 }
     );

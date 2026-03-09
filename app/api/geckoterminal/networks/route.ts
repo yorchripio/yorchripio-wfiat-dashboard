@@ -13,7 +13,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al cargar redes",
+        error: "Error al cargar redes",
       },
       { status: 500 }
     );

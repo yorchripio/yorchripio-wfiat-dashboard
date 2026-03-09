@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { hasMinRole, type Role } from "@/lib/auth-helpers";
 
 export async function GET(): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
     const configs = await prisma.instrumentoConfig.findMany({
       orderBy: { tipo: "asc" },
     });
@@ -10,7 +16,7 @@ export async function GET(): Promise<NextResponse> {
   } catch (error) {
     console.error("[API /instrumentos GET]", error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Error al cargar" },
+      { success: false, error: "Error al cargar instrumentos" },
       { status: 500 }
     );
   }
@@ -18,6 +24,14 @@ export async function GET(): Promise<NextResponse> {
 
 export async function PATCH(request: Request): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
+    const role = (session.user.role as Role) ?? "VIEWER";
+    if (!hasMinRole(role, "ADMIN")) {
+      return NextResponse.json({ success: false, error: "Sin permisos" }, { status: 403 });
+    }
     const body: unknown = await request.json();
 
     if (
@@ -58,7 +72,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   } catch (error) {
     console.error("[API /instrumentos PATCH]", error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Error al actualizar" },
+      { success: false, error: "Error al actualizar instrumento" },
       { status: 500 }
     );
   }

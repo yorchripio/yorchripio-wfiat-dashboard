@@ -3,22 +3,30 @@ import { verify as verifyTOTP } from "otplib";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 import { verify2FAToken } from "@/lib/two-factor-token";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { verify2FASchema } from "@/lib/validations/auth";
+
+const MAX_2FA_ATTEMPTS = 5;
+const WINDOW_MS = 5 * 60 * 1000; // 5 minutos
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const body = await request.json();
-    const email =
-      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-    const code = typeof body.code === "string" ? body.code.trim() : "";
-    const token =
-      typeof body.twoFactorToken === "string"
-        ? body.twoFactorToken.trim()
-        : "";
-
-    if (!email || !code || !token) {
+    const body: unknown = await request.json();
+    const parsed = verify2FASchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: "Faltan campos requeridos" },
+        { success: false, error: "Datos inválidos" },
         { status: 400 }
+      );
+    }
+
+    const { email, code, twoFactorToken: token } = parsed.data;
+
+    const rateLimitKey = `verify-2fa:${email}`;
+    if (!checkRateLimit(rateLimitKey, MAX_2FA_ATTEMPTS, WINDOW_MS)) {
+      return NextResponse.json(
+        { success: false, error: "Demasiados intentos. Esperá 5 minutos." },
+        { status: 429 }
       );
     }
 
@@ -82,7 +90,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const cookieName = isProduction
       ? "__Secure-authjs.session-token"
       : "authjs.session-token";
-    const maxAge = 24 * 60 * 60;
+    const maxAge = 60 * 60; // 1 hora
 
     const sessionToken = await encode({
       token: {

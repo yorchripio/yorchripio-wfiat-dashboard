@@ -60,7 +60,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error desconocido",
+        error: "Error interno del servidor",
       },
       { status: 500 }
     );
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error al crear",
+        error: "Error al crear snapshot",
       },
       { status: 500 }
     );

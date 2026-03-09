@@ -89,9 +89,11 @@ export async function getSupplyHistoricoFromSheet(): Promise<SupplyHistoricoShee
   const datesRow = rows[1] || [];
   const supplyRow = rows[17] || [];
 
-  console.log(`[SupplyImport] Fechas: ${datesRow.length} columnas, Supply: ${supplyRow.length} columnas`);
-  console.log(`[SupplyImport] Primeras 3 fechas: ${JSON.stringify(datesRow.slice(0, 4))}`);
-  console.log(`[SupplyImport] Primeros 3 supplies: ${JSON.stringify(supplyRow.slice(0, 4))}`);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[SupplyImport] Fechas: ${datesRow.length} columnas, Supply: ${supplyRow.length} columnas`);
+    console.log(`[SupplyImport] Primeras 3 fechas: ${JSON.stringify(datesRow.slice(0, 4))}`);
+    console.log(`[SupplyImport] Primeros 3 supplies: ${JSON.stringify(supplyRow.slice(0, 4))}`);
+  }
 
   const result: SupplyHistoricoSheet[] = [];
 
@@ -109,9 +111,11 @@ export async function getSupplyHistoricoFromSheet(): Promise<SupplyHistoricoShee
     result.push({ fecha, total });
   }
 
-  console.log(`[SupplyImport] ${result.length} puntos leídos del Sheet`);
-  if (result.length > 0) {
-    console.log(`[SupplyImport] Rango: ${result[0].fecha.toISOString().slice(0, 10)} → ${result[result.length - 1].fecha.toISOString().slice(0, 10)}`);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[SupplyImport] ${result.length} puntos leídos del Sheet`);
+    if (result.length > 0) {
+      console.log(`[SupplyImport] Rango: ${result[0].fecha.toISOString().slice(0, 10)} → ${result[result.length - 1].fecha.toISOString().slice(0, 10)}`);
+    }
   }
 
   return result;

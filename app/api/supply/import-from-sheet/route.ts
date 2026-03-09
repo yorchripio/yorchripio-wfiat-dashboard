@@ -3,12 +3,22 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { hasMinRole, type Role } from "@/lib/auth-helpers";
 import { getSupplyHistoricoFromSheet } from "@/lib/sheets/supply-import";
 
 const ASSET = "wARS";
 
 export async function POST(): Promise<NextResponse> {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
+    }
+    const role = (session.user.role as Role) ?? "VIEWER";
+    if (!hasMinRole(role, "ADMIN")) {
+      return NextResponse.json({ success: false, error: "Sin permisos" }, { status: 403 });
+    }
     const puntos = await getSupplyHistoricoFromSheet();
 
     if (puntos.length === 0) {
@@ -72,7 +82,7 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Error desconocido",
+        error: "Error al importar supply",
       },
       { status: 500 }
     );
