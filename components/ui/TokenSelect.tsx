@@ -83,7 +83,7 @@ export function TokenSelect({
           className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border border-[#010103]/15 bg-[#FFFFFF] shadow-lg py-1 min-w-[180px] max-h-[280px] overflow-auto"
         >
           {visibleOptions.map((opt) => {
-            const isDisabled = !opt.available && opt.disabledLabel;
+            const isDisabled = !opt.available && !!opt.disabledLabel;
             return (
               <li key={opt.id} role="option" aria-selected={opt.id === value} aria-disabled={isDisabled}>
                 {isDisabled ? (
