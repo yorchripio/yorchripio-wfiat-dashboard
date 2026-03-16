@@ -1,10 +1,9 @@
 // app/login/page.tsx
-// Página de login: email + contraseña; si el usuario tiene 2FA, se muestra input de código.
+// Login page: email @ripio.com → verification code → enter
 
 "use client";
 
 import { useState, Suspense } from "react";
-import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,111 +12,67 @@ import { WFIATLogo } from "@/components/ui/WFIATLogo";
 function LoginForm(): React.ReactElement {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
-  const errorParam = searchParams.get("error");
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [twoFactorToken, setTwoFactorToken] = useState("");
-  const [step, setStep] = useState<"credentials" | "2fa">("credentials");
+  const [step, setStep] = useState<"email" | "code">("email");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(
-    errorParam === "CredentialsSignin"
-      ? "Credenciales inválidas o sesión 2FA expirada."
-      : null
-  );
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmitCredentials(e: React.FormEvent): Promise<void> {
+  async function handleSendCode(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/check-2fa", {
+      const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-        credentials: "same-origin",
+        body: JSON.stringify({ email: email.trim() }),
       });
-      let data: { success?: boolean; requires2FA?: boolean; twoFactorToken?: string; error?: string };
-      try {
-        const text = await res.text();
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        setError("Respuesta inválida del servidor. Intentá de nuevo.");
-        setLoading(false);
-        return;
-      }
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+      };
 
       if (!data.success) {
-        setError(data.error ?? "Error al iniciar sesión");
+        setError(data.error ?? "Error al enviar el código.");
         setLoading(false);
         return;
       }
 
-      if (data.requires2FA) {
-        if (data.twoFactorToken) {
-          setTwoFactorToken(data.twoFactorToken);
-        }
-        setStep("2fa");
-        setLoading(false);
-        return;
-      }
-
-      const result = await signIn("credentials", {
-        email: email.trim(),
-        password,
-        redirect: false,
-        callbackUrl,
-      });
-      if (result == null) {
-        setError("No se pudo conectar. Intentá de nuevo.");
-        setLoading(false);
-        return;
-      }
-      if (result.error || !result.ok) {
-        setError("Credenciales inválidas");
-        setLoading(false);
-        return;
-      }
-      window.location.replace(result.url ?? callbackUrl);
-    } catch (err) {
-      console.error(err);
-      setError("Error de conexión");
+      setStep("code");
+      setLoading(false);
+    } catch {
+      setError("Error de conexión.");
       setLoading(false);
     }
   }
 
-  async function handleSubmit2FA(e: React.FormEvent): Promise<void> {
+  async function handleVerifyCode(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      if (!twoFactorToken) {
-        setError("Sesión expirada. Volvé a ingresar email y contraseña.");
-        setStep("credentials");
-        setLoading(false);
-        return;
-      }
-      const res = await fetch("/api/auth/verify-2fa", {
+      const res = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          code: code.trim(),
-          twoFactorToken,
-        }),
+        body: JSON.stringify({ email: email.trim(), code: code.trim() }),
         credentials: "same-origin",
       });
-      const data = await res.json() as { success?: boolean; error?: string };
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
       if (!data.success) {
-        setError(data.error ?? "Código 2FA incorrecto");
+        setError(data.error ?? "Código incorrecto.");
         setLoading(false);
         return;
       }
+
       window.location.replace(callbackUrl);
-    } catch (err) {
-      console.error(err);
-      setError("Error de conexión");
+    } catch {
+      setError("Error de conexión.");
       setLoading(false);
     }
   }
@@ -133,7 +88,7 @@ function LoginForm(): React.ReactElement {
         <Card className="w-full border-[#010103]/10">
           <CardHeader>
             <CardTitle className="text-xl">
-              {step === "2fa" ? "Código 2FA" : "Iniciar sesión"}
+              {step === "code" ? "Verificar código" : "Iniciar sesión"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -143,8 +98,8 @@ function LoginForm(): React.ReactElement {
               </div>
             )}
 
-            {step === "credentials" ? (
-              <form onSubmit={handleSubmitCredentials} className="space-y-4">
+            {step === "email" ? (
+              <form onSubmit={handleSendCode} className="space-y-4">
                 <div>
                   <label
                     htmlFor="email"
@@ -157,40 +112,28 @@ function LoginForm(): React.ReactElement {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    placeholder="nombre@ripio.com"
                     required
                     autoComplete="email"
                     className="w-full border border-[#010103]/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
                   />
-                </div>
-                <div>
-                  <label
-                    htmlFor="password"
-                    className="block text-sm font-medium text-[#010103] mb-1"
-                  >
-                    Contraseña
-                  </label>
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    className="w-full border border-[#010103]/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
-                  />
+                  <p className="text-xs text-[#010103]/50 mt-1">
+                    Solo emails @ripio.com
+                  </p>
                 </div>
                 <Button
                   type="submit"
                   disabled={loading}
                   className="w-full bg-[#5f6e78] hover:bg-[#5f6e78]/90"
                 >
-                  {loading ? "Verificando..." : "Entrar"}
+                  {loading ? "Enviando..." : "Enviar código"}
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleSubmit2FA} className="space-y-4">
+              <form onSubmit={handleVerifyCode} className="space-y-4">
                 <p className="text-sm text-[#010103]/70">
-                  Contraseña correcta. Ingresá el código de 6 dígitos de tu app de autenticación para <strong>{email || "tu cuenta"}</strong>.
+                  Enviamos un código de 6 dígitos a{" "}
+                  <strong>{email}</strong>.
                 </p>
                 <div>
                   <label
@@ -209,6 +152,7 @@ function LoginForm(): React.ReactElement {
                       setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
                     placeholder="000000"
+                    autoFocus
                     className="w-full border border-[#010103]/20 rounded-lg px-3 py-2 text-sm text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-[#5f6e78]"
                   />
                 </div>
@@ -222,13 +166,13 @@ function LoginForm(): React.ReactElement {
                 <button
                   type="button"
                   onClick={() => {
-                    setStep("credentials");
+                    setStep("email");
                     setCode("");
                     setError(null);
                   }}
                   className="w-full text-sm text-[#010103]/60 hover:underline"
                 >
-                  Volver
+                  Cambiar email
                 </button>
               </form>
             )}
@@ -241,7 +185,13 @@ function LoginForm(): React.ReactElement {
 
 export default function LoginPage(): React.ReactElement {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">Cargando...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
+          Cargando...
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );
