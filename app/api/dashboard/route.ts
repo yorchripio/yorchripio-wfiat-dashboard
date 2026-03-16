@@ -12,7 +12,7 @@ import { getRendimientoDataFromDB } from "@/lib/db/rendimiento";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { prisma } from "@/lib/db";
 import { getPenBalance } from "@/lib/wpen/buda-client";
-import { getClpBalance } from "@/lib/wclp/buda-chile-client";
+
 import { fetchAdcapCuotaparte } from "@/lib/cafci/client";
 import { calculateAndSaveRendimiento } from "@/lib/db/rendimiento-calc";
 
@@ -192,34 +192,38 @@ async function getWpenCollateralData(): Promise<ColateralData | null> {
   }
 }
 
-/** Build ColateralData for wCLP from Buda.com Chile balance (no yield) */
+/** Build ColateralData for wCLP from BCI account snapshot (DB) */
 async function getWclpCollateralData(): Promise<ColateralData | null> {
   try {
-    const balance = await getClpBalance();
-    if (balance.amount <= 0) return null;
+    const bciSnapshot = await prisma.wclpAccountSnapshot.findFirst({
+      orderBy: { fechaCorte: "desc" },
+    });
+    if (!bciSnapshot) return null;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const total = Number(bciSnapshot.saldoFinal);
+    const fecha = bciSnapshot.fechaCorte.toISOString().slice(0, 10);
+
     return {
-      fecha: today,
+      fecha,
       instrumentos: [
         {
-          id: "buda-clp",
-          nombre: "Balance Buda.com Chile (a la vista)",
+          id: "bci-cta-cte",
+          nombre: "Cuenta Corriente BCI",
           tipo: "A_la_Vista" as const,
-          entidad: "Buda.com Chile",
-          valorTotal: balance.amount,
+          entidad: "BCI",
+          valorTotal: total,
           porcentaje: 100,
           rendimientoDiario: 0,
           activo: true,
         },
       ],
-      total: balance.amount,
-      totalFormatted: `$ ${Math.round(balance.amount).toLocaleString("es-CL")}`,
+      total,
+      totalFormatted: `$ ${Math.round(total).toLocaleString("es-CL")}`,
       timestamp: new Date().toISOString(),
       rendimientoCartera: 0,
     };
   } catch (err) {
-    console.error("[wCLP collateral] Error fetching Buda Chile balance:", err);
+    console.error("[wCLP collateral] Error:", err);
     return null;
   }
 }

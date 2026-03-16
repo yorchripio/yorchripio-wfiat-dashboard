@@ -198,3 +198,20 @@ model WcopAccountSnapshot {
   @@index([fechaCorte])
   @@map("wcop_account_snapshots")
 }
+
+/// Snapshot mensual de la cuenta corriente BCI para wCLP.
+/// Resumen derivado del XLSX extracto bancario (MOVCTACTE).
+model WclpAccountSnapshot {
+  id              String   @id @default(uuid())
+  fechaCorte      DateTime @db.Date @map("fecha_corte")
+  periodoInicio   DateTime @db.Date @map("periodo_inicio")
+  periodoFin      DateTime @db.Date @map("periodo_fin")
+  saldoFinal      Decimal  @db.Decimal(18, 2) @map("saldo_final")
+  totalAbonos     Decimal  @db.Decimal(18, 2) @map("total_abonos")
+  totalCargos     Decimal  @db.Decimal(18, 2) @map("total_cargos")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([fechaCorte])
+  @@map("wclp_account_snapshots")
+}
