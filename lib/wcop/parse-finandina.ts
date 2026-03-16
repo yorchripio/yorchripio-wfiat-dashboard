@@ -56,8 +56,7 @@ function classifyTransaction(descripcion: string): FinandinaTransaction["tipo"] 
 
   if (d.includes("rendimientos financieros")) return "rendimiento";
 
-  // WCOP deposits: Coopcentral 9011830296 (Nombre Empresa / collateral transfers)
-  // Koywe (9016209541) and Spacewalk (9012288029) are MM operations
+  // WCOP deposits: Coopcentral 9011830296 (Nombre Empresa / collateral for WC mints)
   if (d.includes("transf. recibida") && d.includes("coopcentral") && d.includes("9011830296")) {
     return "deposito_wcop";
   }

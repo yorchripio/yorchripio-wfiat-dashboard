@@ -75,7 +75,9 @@ async function getWmxnCollateralData(): Promise<ColateralData | null> {
   };
 }
 
-/** Build ColateralData for wCOP from account snapshots in DB */
+/** Build ColateralData for wCOP from account snapshots in DB.
+ *  Also includes ETH+Base supply as additional collateral (minted 2026-02-26)
+ *  with estimated interest from Finandina account rate. */
 async function getWcopCollateralData(): Promise<ColateralData | null> {
   const latest = await prisma.wcopAccountSnapshot.findFirst({
     orderBy: { fechaCorte: "desc" },
@@ -84,26 +86,72 @@ async function getWcopCollateralData(): Promise<ColateralData | null> {
 
   const capitalWcop = Number(latest.capitalWcop);
   const rendimientos = Number(latest.rendimientos);
-  // Capital + rendimientos proporcionales = colateral real del wCOP
-  const colateralTotal = capitalWcop + rendimientos;
+  // Capital + rendimientos proporcionales = colateral real del wCOP (World Chain)
+  const colateralWC = capitalWcop + rendimientos;
+
+  // ETH+Base supply was minted on 2026-02-26 and is also backed by Finandina funds.
+  // Query on-chain supply for those chains to get the exact amount.
+  let ethBaseCapital = 0;
+  let ethBaseInterest = 0;
+  const MINT_DATE = "2026-02-26";
+  try {
+    const supplyData = await getTotalSupply("wCOP");
+    const ethSupply = supplyData.chains.ethereum.success ? supplyData.chains.ethereum.supply : 0;
+    const baseSupply = supplyData.chains.base.success ? supplyData.chains.base.supply : 0;
+    ethBaseCapital = ethSupply + baseSupply;
+
+    if (ethBaseCapital > 0) {
+      // Finandina account TNA (approx 9.13% from Feb 2026 monthly breakdown)
+      const tna = 0.0913;
+      const dailyRate = Math.pow(1 + tna, 1 / 365) - 1;
+      const today = new Date().toISOString().slice(0, 10);
+      const daysSinceMint = Math.max(0, Math.round(
+        (new Date(today + "T00:00:00Z").getTime() - new Date(MINT_DATE + "T00:00:00Z").getTime()) / 86400000
+      ));
+      ethBaseInterest = ethBaseCapital * (Math.pow(1 + dailyRate, daysSinceMint) - 1);
+    }
+  } catch (err) {
+    console.error("[wCOP collateral] Error fetching ETH+Base supply for collateral:", err);
+  }
+
+  const colateralTotal = colateralWC + ethBaseCapital + ethBaseInterest;
   const rendDiario = capitalWcop > 0 ? ((rendimientos / capitalWcop) / 30) * 100 : 0;
+
+  const instrumentos = [
+    {
+      id: "cuenta-ahorro-finandina",
+      nombre: "Cuenta Ahorro Finandina (World Chain)",
+      tipo: "Cuenta_Remunerada" as const,
+      entidad: "Finandina",
+      valorTotal: colateralWC,
+      porcentaje: colateralTotal > 0 ? (colateralWC / colateralTotal) * 100 : 100,
+      rendimientoDiario: rendDiario,
+      activo: true,
+    },
+  ];
+
+  if (ethBaseCapital > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const daysSinceMint = Math.max(0, Math.round(
+      (new Date(today + "T00:00:00Z").getTime() - new Date(MINT_DATE + "T00:00:00Z").getTime()) / 86400000
+    ));
+    instrumentos.push({
+      id: "finandina-eth-base",
+      nombre: `Finandina ETH+Base mints (est. +${daysSinceMint}d)`,
+      tipo: "Cuenta_Remunerada" as const,
+      entidad: "Finandina",
+      valorTotal: ethBaseCapital + ethBaseInterest,
+      porcentaje: colateralTotal > 0 ? ((ethBaseCapital + ethBaseInterest) / colateralTotal) * 100 : 0,
+      rendimientoDiario: rendDiario,
+      activo: true,
+    });
+  }
 
   return {
     fecha: latest.fechaCorte.toISOString().slice(0, 10),
-    instrumentos: [
-      {
-        id: "cuenta-ahorro-finandina",
-        nombre: "Cuenta Ahorro Finandina (wCOP)",
-        tipo: "Cuenta_Remunerada" as const,
-        entidad: "Finandina",
-        valorTotal: colateralTotal,
-        porcentaje: 100,
-        rendimientoDiario: rendDiario,
-        activo: true,
-      },
-    ],
+    instrumentos,
     total: colateralTotal,
-    totalFormatted: `$ ${colateralTotal.toLocaleString("es-CO", { minimumFractionDigits: 0 })}`,
+    totalFormatted: `$ ${Math.round(colateralTotal).toLocaleString("es-CO", { minimumFractionDigits: 0 })}`,
     timestamp: new Date().toISOString(),
     rendimientoCartera: rendDiario,
   };
