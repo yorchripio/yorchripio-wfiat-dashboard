@@ -135,13 +135,22 @@ export function RendimientoCarteraCard({
 
     const rendimientoAcumulado = (compounded - 1) * 100;
 
-    // Retorno real = ARS ganados / capital promedio ponderado por tiempo
-    // Así no se distorsiona cuando hubo ingresos de capital durante el período
-    let sumaCapital = 0;
-    for (const d of filtered) {
-      sumaCapital += (d.totalColateral ?? 0);
+    // Retorno real = ARS ganados / capital promedio ponderado por días calendario
+    // Cada registro pesa por los días calendario hasta el siguiente (viernes pesa 3: vie+sáb+dom)
+    let sumaCapitalPonderada = 0;
+    let totalDiasPonderados = 0;
+    for (let i = 0; i < filtered.length; i++) {
+      const capital = filtered[i].totalColateral ?? 0;
+      let diasPeso: number;
+      if (i < filtered.length - 1) {
+        diasPeso = Math.round((filtered[i + 1].timestamp - filtered[i].timestamp) / 86400000);
+      } else {
+        diasPeso = 1; // último día
+      }
+      sumaCapitalPonderada += capital * diasPeso;
+      totalDiasPonderados += diasPeso;
     }
-    const capitalPromedio = sumaCapital / filtered.length;
+    const capitalPromedio = totalDiasPonderados > 0 ? sumaCapitalPonderada / totalDiasPonderados : 0;
     const rendimientoReal = capitalPromedio > 0 ? (valorGanadoARS / capitalPromedio) * 100 : 0;
 
     // TNA = anualización lineal usando días calendario del filtro (Desde → Hasta)
