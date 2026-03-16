@@ -2,7 +2,7 @@
 // Rendimiento diario desde rendimiento_historico (importado del Sheet) + allocations para totales.
 
 import { prisma } from "@/lib/db";
-import type { RendimientoDiario } from "@/lib/sheets/rendimiento";
+import type { RendimientoDiario } from "@/lib/types/rendimiento";
 
 const DEFAULT_ASSET = "wARS";
 

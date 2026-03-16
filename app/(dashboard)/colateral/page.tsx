@@ -6,7 +6,7 @@ import { RendimientoCarteraCard } from "@/components/cards/RendimientoCarteraCar
 import { RendimientosChart } from "@/components/cards/RendimientosChart";
 import { RatioHistoryChart } from "@/components/cards/RatioHistoryChart";
 import { type ColateralData } from "@/lib/sheets/collateral";
-import { type RendimientoDiario } from "@/lib/sheets/rendimiento";
+import { type RendimientoDiario } from "@/lib/types/rendimiento";
 import { type HistoricalDataPoint } from "@/lib/sheets/history";
 import { RefreshCw } from "lucide-react";
 import { TokenSelect } from "@/components/ui/TokenSelect";

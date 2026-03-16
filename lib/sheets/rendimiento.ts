@@ -4,22 +4,9 @@
 import { google } from "googleapis";
 import { parsePercentage } from "./collateral";
 
-/**
- * Un punto de datos diario con rendimiento y allocation.
- * allocation: % del total por tipo de instrumento (dinámico por fecha).
- */
-export interface RendimientoDiario {
-  fecha: string;         // DD/MM/YYYY
-  dateKey: string;       // YYYY-MM-DD para ordenar
-  timestamp: number;     // ms UTC
-  rendimiento: number;   // rendimiento diario de la cartera (%)
-  /** % alocado por tipo (ej. FCI, Cuenta_Remunerada, A_la_Vista, etc.) */
-  allocation: Record<string, number>;
-  /** Total colateral ese día (suma de todos los activos cargados en esa fecha) */
-  totalColateral?: number;
-  /** Por instrumento: valorTotal y cantidad */
-  byTipoDetalle?: Record<string, { valorTotal: number; cantidad: number }>;
-}
+// Re-export from shared types to maintain backwards compatibility
+export type { RendimientoDiario } from "@/lib/types/rendimiento";
+import type { RendimientoDiario } from "@/lib/types/rendimiento";
 
 /**
  * Parsea fecha DD/MM/YYYY o DD/MM/YY a partes { day, month, year }

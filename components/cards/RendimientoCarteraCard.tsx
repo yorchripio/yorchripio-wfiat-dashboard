@@ -6,7 +6,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { type RendimientoDiario } from "@/lib/sheets/rendimiento";
+import { type RendimientoDiario } from "@/lib/types/rendimiento";
 import { COLLATERAL_COLORS } from "@/lib/constants/colors";
 
 interface RendimientoCarteraCardProps {
