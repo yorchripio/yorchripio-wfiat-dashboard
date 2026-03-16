@@ -139,9 +139,12 @@ export function RendimientoCarteraCard({
     const capitalActual = filtered[filtered.length - 1].totalColateral ?? 0;
     const rendimientoReal = capitalActual > 0 ? (valorGanadoARS / capitalActual) * 100 : 0;
 
-    // TNA = anualización lineal del rendimiento real del período
-    const tna = filtered.length > 0
-      ? (rendimientoReal / filtered.length) * 365
+    // TNA = anualización lineal usando días calendario del filtro (Desde → Hasta)
+    const startTs = startDate ? dateInputToTimestamp(startDate) : filtered[0].timestamp;
+    const endTs = endDate ? dateInputToTimestamp(endDate) : filtered[filtered.length - 1].timestamp;
+    const diasCalendario = Math.round((endTs - startTs) / 86400000) + 1;
+    const tna = diasCalendario > 0
+      ? (rendimientoReal / diasCalendario) * 365
       : 0;
 
     const sumByTipo: Record<string, number> = {};
@@ -162,10 +165,10 @@ export function RendimientoCarteraCard({
       rendimientoReal,
       tna,
       valorGanadoARS,
-      diasEnPeriodo: n,
+      diasEnPeriodo: diasCalendario,
       avgAllocation,
     };
-  }, [filtered]);
+  }, [filtered, startDate, endDate]);
 
   const rendColor =
     metrics.rendimientoReal > 0
