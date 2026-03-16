@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/supply-snapshot",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-pools",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

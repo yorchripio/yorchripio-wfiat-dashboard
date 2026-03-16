@@ -199,6 +199,19 @@ model WcopAccountSnapshot {
   @@map("wcop_account_snapshots")
 }
 
+/// Cache de pools de GeckoTerminal. Se actualiza cada 15 min vía cron.
+model GeckoPoolCache {
+  id          String   @id // poolAddress
+  networkId   String   @map("network_id")
+  label       String
+  token       String
+  dataJson    Json     @map("data_json") // Full GeckoPool object
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([token])
+  @@map("gecko_pool_cache")
+}
+
 /// Snapshot mensual de la cuenta corriente BCI para wCLP.
 /// Resumen derivado del XLSX extracto bancario (MOVCTACTE).
 model WclpAccountSnapshot {
