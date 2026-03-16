@@ -139,9 +139,9 @@ export function RendimientoCarteraCard({
     const capitalActual = filtered[filtered.length - 1].totalColateral ?? 0;
     const rendimientoReal = capitalActual > 0 ? (valorGanadoARS / capitalActual) * 100 : 0;
 
-    // TNA basada en TWR compuesto (no distorsionada por flujos de capital)
+    // TNA = anualización lineal del TWR (tasa nominal, no compuesta)
     const tna = filtered.length > 0
-      ? (Math.pow(compounded, 365 / filtered.length) - 1) * 100
+      ? (rendimientoAcumulado / filtered.length) * 365
       : 0;
 
     const sumByTipo: Record<string, number> = {};
