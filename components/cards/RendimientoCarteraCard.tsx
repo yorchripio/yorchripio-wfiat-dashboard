@@ -135,12 +135,9 @@ export function RendimientoCarteraCard({
 
     const rendimientoAcumulado = (compounded - 1) * 100;
 
-    // Capital al inicio y al final del período para calcular retorno real
-    const capitalInicio = filtered[0].totalColateral ?? 0;
-    const capitalFin = filtered[filtered.length - 1].totalColateral ?? 0;
-    // Retorno real = ARS ganados / capital promedio (inicio+fin)/2
-    const capitalPromedio = (capitalInicio + capitalFin) / 2;
-    const rendimientoReal = capitalPromedio > 0 ? (valorGanadoARS / capitalPromedio) * 100 : 0;
+    // Retorno real = ARS ganados / capital actual (último día del período)
+    const capitalActual = filtered[filtered.length - 1].totalColateral ?? 0;
+    const rendimientoReal = capitalActual > 0 ? (valorGanadoARS / capitalActual) * 100 : 0;
     const tna = filtered.length > 0 ? (rendimientoReal / filtered.length) * 365 : 0;
 
     const sumByTipo: Record<string, number> = {};
