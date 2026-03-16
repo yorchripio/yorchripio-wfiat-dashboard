@@ -10,9 +10,9 @@ type PoolResult =
   | { poolAddress: string; networkId: string; label: string; token: string; error: string };
 
 const BASE_URL = "https://api.geckoterminal.com/api/v2";
-const DELAY_MS = 400; // ~2.5 req/sec — well under 30/min limit
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 3000; // wait 3s on 429 before retry
+const DELAY_MS = 2500; // ~0.4 req/sec — safe for GeckoTerminal rate limit
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 5000; // wait 5s on 429 before retry
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
