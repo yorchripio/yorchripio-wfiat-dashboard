@@ -5,7 +5,6 @@ const CAFCI_BASE = "https://api.pub.cafci.org.ar/estadisticas/informacion/diaria
 
 interface CafciFund {
   fondo?: string;
-  clase?: string;
   vcp?: number;
   [key: string]: unknown;
 }
@@ -36,7 +35,6 @@ export async function fetchAdcapCuotaparte(
       if (!res.ok) continue;
 
       const body = await res.json();
-      // The API returns { data: [...] } or similar structure with fund entries
       const items: CafciFund[] = Array.isArray(body)
         ? body
         : Array.isArray(body?.data)
@@ -45,13 +43,12 @@ export async function fetchAdcapCuotaparte(
 
       if (items.length === 0) continue;
 
-      // Find Adcap Ahorro Pesos Clase B
+      // "Adcap Ahorro Pesos Fondo de Dinero - Clase B" — match on fondo name
       const fund = items.find(
         (f) =>
           typeof f.fondo === "string" &&
           f.fondo.toLowerCase().includes("adcap ahorro pesos") &&
-          typeof f.clase === "string" &&
-          f.clase.toLowerCase().includes("b")
+          f.fondo.toLowerCase().includes("clase b")
       );
 
       if (fund && typeof fund.vcp === "number" && fund.vcp > 0) {

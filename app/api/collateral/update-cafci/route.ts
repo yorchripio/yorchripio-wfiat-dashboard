@@ -1,6 +1,6 @@
 // app/api/collateral/update-cafci/route.ts
 // Actualiza el valor cuotaparte del FCI Adcap desde la API de CAFCI.
-// Crea una nueva CollateralAllocation con el vcp actualizado y recalcula rendimiento.
+// Crea allocations para la fecha CAFCI + estima hasta hoy.
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -28,113 +28,133 @@ export async function POST(): Promise<NextResponse> {
       );
     }
 
-    // Find the latest FCI allocation for wARS (Adcap)
     const latestFci = await prisma.collateralAllocation.findFirst({
-      where: {
-        asset: ASSET,
-        tipo: "FCI",
-        activo: true,
-      },
+      where: { asset: ASSET, tipo: "FCI", activo: true },
       orderBy: { fecha: "desc" },
     });
 
     if (!latestFci) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "No hay allocation FCI para wARS. Cargá una línea primero.",
-        },
+        { success: false, error: "No hay allocation FCI para wARS. Cargá una línea primero." },
         { status: 404 }
       );
     }
 
-    const cafciFecha = new Date(cafciData.fecha + "T00:00:00.000Z");
-    const latestFechaKey = latestFci.fecha.toISOString().slice(0, 10);
-    const latestVcp = Number(latestFci.valorCuotaparte);
+    const today = new Date().toISOString().slice(0, 10);
+    const latestDate = latestFci.fecha.toISOString().slice(0, 10);
 
-    // If we already have an allocation for this CAFCI date with same vcp, skip
-    if (
-      latestFechaKey === cafciData.fecha &&
-      Math.abs(latestVcp - cafciData.vcp) < 0.001
-    ) {
+    // Already up to date
+    if (latestDate === today) {
       return NextResponse.json({
         success: true,
         updated: false,
         message: "Ya actualizado",
-        fecha: cafciData.fecha,
-        vcp: cafciData.vcp,
-        valorTotal:
-          Number(latestFci.cantidadCuotasPartes) * cafciData.vcp,
+        fecha: today,
+        vcp: Number(latestFci.valorCuotaparte),
       });
     }
 
-    // Also copy all other active allocations for the same date (Cuenta_Remunerada, A_la_Vista)
-    // so the full collateral picture is preserved for the new date
-    const allLatestAllocations = await prisma.collateralAllocation.findMany({
-      where: {
-        asset: ASSET,
-        fecha: latestFci.fecha,
-        activo: true,
-      },
+    // All allocations from latest date (multiple FCI lines + other types)
+    const allLatest = await prisma.collateralAllocation.findMany({
+      where: { asset: ASSET, fecha: latestFci.fecha, activo: true },
     });
 
-    // Create allocations for the CAFCI date
-    for (const alloc of allLatestAllocations) {
-      const isFci = alloc.tipo === "FCI";
-      const newVcp = isFci ? cafciData.vcp : Number(alloc.valorCuotaparte);
-      const cant = Number(alloc.cantidadCuotasPartes);
+    // Daily rate from prev vcp → CAFCI vcp
+    const prevVcp = Number(latestFci.valorCuotaparte);
+    const cafciDate = new Date(cafciData.fecha + "T00:00:00.000Z");
+    const daysBetween = Math.max(1, Math.round(
+      (cafciDate.getTime() - latestFci.fecha.getTime()) / 86400000
+    ));
+    const dailyRate = prevVcp > 0 ? Math.pow(cafciData.vcp / prevVcp, 1 / daysBetween) - 1 : 0;
 
-      // Check if allocation already exists for this date+tipo
-      const existing = await prisma.collateralAllocation.findFirst({
-        where: {
-          asset: ASSET,
-          tipo: alloc.tipo,
-          fecha: cafciFecha,
-          activo: true,
-        },
-      });
+    // Build dates: CAFCI date (real) + days until today (estimated)
+    const todayDate = new Date(today + "T00:00:00.000Z");
+    const dates: { fecha: Date; vcp: number }[] = [];
 
-      if (existing) {
-        // Update vcp if it's the FCI
-        if (isFci && Math.abs(Number(existing.valorCuotaparte) - newVcp) > 0.001) {
-          await prisma.collateralAllocation.update({
-            where: { id: existing.id },
-            data: { valorCuotaparte: newVcp },
-          });
-        }
-      } else {
-        await prisma.collateralAllocation.create({
-          data: {
-            asset: ASSET,
-            tipo: alloc.tipo,
-            nombre: alloc.nombre,
-            entidad: alloc.entidad,
-            cantidadCuotasPartes: cant,
-            valorCuotaparte: newVcp,
-            fecha: cafciFecha,
-            activo: true,
-          },
+    if (cafciData.fecha !== latestDate) {
+      dates.push({ fecha: cafciDate, vcp: cafciData.vcp });
+    }
+
+    if (dailyRate > 0) {
+      const d = new Date(cafciDate);
+      d.setUTCDate(d.getUTCDate() + 1);
+      let n = 1;
+      while (d <= todayDate) {
+        dates.push({
+          fecha: new Date(d.getTime()),
+          vcp: cafciData.vcp * Math.pow(1 + dailyRate, n),
         });
+        d.setUTCDate(d.getUTCDate() + 1);
+        n++;
       }
     }
 
-    // Recalculate rendimiento for the CAFCI date
-    try {
-      await calculateAndSaveRendimiento(cafciFecha);
-    } catch (err) {
-      console.warn("[update-cafci] Error calculando rendimiento:", err);
+    let created = 0;
+    for (const { fecha, vcp } of dates) {
+      const existingForDate = await prisma.collateralAllocation.findMany({
+        where: { asset: ASSET, fecha, activo: true },
+      });
+      const existingKeys = new Set(
+        existingForDate.map((e) => `${e.tipo}:${Number(e.cantidadCuotasPartes).toFixed(6)}`)
+      );
+
+      for (const alloc of allLatest) {
+        const isFci = alloc.tipo === "FCI";
+        const newVcp = isFci ? vcp : Number(alloc.valorCuotaparte);
+        const key = `${alloc.tipo}:${Number(alloc.cantidadCuotasPartes).toFixed(6)}`;
+
+        if (existingKeys.has(key)) {
+          if (isFci) {
+            const ex = existingForDate.find(
+              (e) => e.tipo === "FCI" &&
+                Math.abs(Number(e.cantidadCuotasPartes) - Number(alloc.cantidadCuotasPartes)) < 0.01
+            );
+            if (ex && Math.abs(Number(ex.valorCuotaparte) - newVcp) > 0.001) {
+              await prisma.collateralAllocation.update({
+                where: { id: ex.id },
+                data: { valorCuotaparte: newVcp },
+              });
+            }
+          }
+        } else {
+          await prisma.collateralAllocation.create({
+            data: {
+              asset: ASSET,
+              tipo: alloc.tipo,
+              nombre: alloc.nombre,
+              entidad: alloc.entidad,
+              cantidadCuotasPartes: Number(alloc.cantidadCuotasPartes),
+              valorCuotaparte: newVcp,
+              fecha,
+              activo: true,
+            },
+          });
+          created++;
+        }
+      }
+
+      try {
+        await calculateAndSaveRendimiento(fecha);
+      } catch (err) {
+        console.warn("[update-cafci] rendimiento calc error:", err);
+      }
     }
 
-    const valorTotal =
-      Number(latestFci.cantidadCuotasPartes) * cafciData.vcp;
+    // Total for response (sum all FCI lines)
+    const totalFci = allLatest
+      .filter((a) => a.tipo === "FCI")
+      .reduce((sum, a) => sum + Number(a.cantidadCuotasPartes), 0);
+    const vcpToday = dates.length > 0 ? dates[dates.length - 1].vcp : cafciData.vcp;
 
     return NextResponse.json({
       success: true,
       updated: true,
       fecha: cafciData.fecha,
       vcp: cafciData.vcp,
-      vcpAnterior: latestVcp,
-      valorTotal,
+      vcpEstimadoHoy: vcpToday,
+      dailyRate: dailyRate * 100,
+      valorTotal: totalFci * vcpToday,
+      datesCreated: dates.length,
     });
   } catch (e) {
     console.error("[update-cafci]", e);
