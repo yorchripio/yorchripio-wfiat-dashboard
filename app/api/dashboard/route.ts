@@ -121,7 +121,7 @@ async function getWcopCollateralData(): Promise<ColateralData | null> {
   const instrumentos = [
     {
       id: "cuenta-ahorro-finandina",
-      nombre: "Cuenta Ahorro Finandina (World Chain)",
+      nombre: "Cta. Remunerada (World Chain)",
       tipo: "Cuenta_Remunerada" as const,
       entidad: "Finandina",
       valorTotal: colateralWC,
@@ -138,7 +138,7 @@ async function getWcopCollateralData(): Promise<ColateralData | null> {
     ));
     instrumentos.push({
       id: "finandina-eth-base",
-      nombre: `Finandina ETH+Base mints (est. +${daysSinceMint}d)`,
+      nombre: `Cta. Remunerada (ETH+Base)`,
       tipo: "Cuenta_Remunerada" as const,
       entidad: "Finandina",
       valorTotal: ethBaseCapital + ethBaseInterest,
