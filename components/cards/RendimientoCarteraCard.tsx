@@ -138,7 +138,11 @@ export function RendimientoCarteraCard({
     // Retorno real = ARS ganados / capital actual (último día del período)
     const capitalActual = filtered[filtered.length - 1].totalColateral ?? 0;
     const rendimientoReal = capitalActual > 0 ? (valorGanadoARS / capitalActual) * 100 : 0;
-    const tna = filtered.length > 0 ? (rendimientoReal / filtered.length) * 365 : 0;
+
+    // TNA basada en TWR compuesto (no distorsionada por flujos de capital)
+    const tna = filtered.length > 0
+      ? (Math.pow(compounded, 365 / filtered.length) - 1) * 100
+      : 0;
 
     const sumByTipo: Record<string, number> = {};
     for (const d of filtered) {
