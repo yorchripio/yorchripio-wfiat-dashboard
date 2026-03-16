@@ -5,7 +5,7 @@ export interface FixedPool {
   networkId: string;
   poolAddress: string;
   label: string;
-  token: "wARS" | "wBRL" | "wMXN" | "wCOP" | "wPEN";
+  token: "wARS" | "wBRL" | "wMXN" | "wCOP" | "wPEN" | "wCLP";
 }
 
 export const FIXED_POOLS: readonly FixedPool[] = [
@@ -67,5 +67,12 @@ export const FIXED_POOLS: readonly FixedPool[] = [
     poolAddress: "0x99f91095af6e853d7c9d627d1991156815e26f62884aaf8d72fecf8d63afd5f7",
     label: "World Chain",
     token: "wPEN",
+  },
+  // ── wCLP ──────────────────────────────────────────────
+  {
+    networkId: "world-chain",
+    poolAddress: "0x6ceed000630ae473448c478afa4a08630c9d17c9775aa8b270839809ba195ece",
+    label: "World Chain",
+    token: "wCLP",
   },
 ] as const;

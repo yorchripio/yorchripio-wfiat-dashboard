@@ -52,12 +52,25 @@ export const WPEN_CONFIG = {
   },
 } as const;
 
+export const WCLP_CONFIG = {
+  name: "Wrapped Chilean Peso",
+  symbol: "wCLP",
+  address: "0x61d450a098b6a7f69fc4b98ce68198fe59768651", // World Chain only
+  decimals: 18,
+  chainAddresses: {
+    ethereum: "",
+    worldchain: "0x61d450a098b6a7f69fc4b98ce68198fe59768651",
+    base: "",
+  },
+} as const;
+
 export const TOKEN_CONFIGS = {
   wARS: WARS_CONFIG,
   wBRL: WBRL_CONFIG,
   wMXN: WMXN_CONFIG,
   wCOP: WCOP_CONFIG,
   wPEN: WPEN_CONFIG,
+  wCLP: WCLP_CONFIG,
 } as const;
 
 export type AssetSymbol = keyof typeof TOKEN_CONFIGS;

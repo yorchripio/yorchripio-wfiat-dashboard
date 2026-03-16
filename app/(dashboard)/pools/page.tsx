@@ -242,6 +242,7 @@ export default function PoolsPage(): React.ReactElement {
     { id: "wMXN", label: "wMXN", available: true },
     { id: "wCOP", label: "wCOP", available: true },
     { id: "wPEN", label: "wPEN", available: true },
+    { id: "wCLP", label: "wCLP", available: true },
   ];
 
   const fetchPools = useCallback(async (): Promise<void> => {

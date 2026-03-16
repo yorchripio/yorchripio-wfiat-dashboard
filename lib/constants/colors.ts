@@ -33,6 +33,7 @@ export const CHART_TOKEN_COLORS: Record<string, string> = {
   wMXN: "#006341", // Verde mexicano
   wCOP: "#d4a017", // Dorado colombiano
   wPEN: "#d91023", // Rojo peruano
+  wCLP: "#0033A0", // Azul chileno
 };
 
 /** Color para líneas/áreas de gráficos según el token seleccionado. Por defecto wARS (azul). */

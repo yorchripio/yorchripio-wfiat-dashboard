@@ -88,7 +88,7 @@ export default function Dashboard(): React.ReactElement {
     shouldRetryOnError: false,
   });
 
-  const currencyMap: Record<string, string> = { wARS: "ARS", wBRL: "BRL", wMXN: "MXN", wCOP: "COP", wPEN: "PEN" };
+  const currencyMap: Record<string, string> = { wARS: "ARS", wBRL: "BRL", wMXN: "MXN", wCOP: "COP", wPEN: "PEN", wCLP: "CLP" };
   const currencyCode = currencyMap[selectedStable] ?? "ARS";
 
   const supplyData = dashboardData?.supplyData ?? null;
@@ -129,6 +129,7 @@ export default function Dashboard(): React.ReactElement {
     { id: "wMXN", label: "wMXN", available: true },
     { id: "wCOP", label: "wCOP", available: true },
     { id: "wPEN", label: "wPEN", available: true },
+    { id: "wCLP", label: "wCLP", available: true },
   ];
 
   return (
@@ -151,7 +152,7 @@ export default function Dashboard(): React.ReactElement {
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-[#010103]/70">
-                {{ wARS: "Argentina", wBRL: "Brasil", wMXN: "México", wCOP: "Colombia", wPEN: "Perú" }[selectedStable] ?? selectedStable}
+                {{ wARS: "Argentina", wBRL: "Brasil", wMXN: "México", wCOP: "Colombia", wPEN: "Perú", wCLP: "Chile" }[selectedStable] ?? selectedStable}
               </span>
               {dashboardData && (
                 <span

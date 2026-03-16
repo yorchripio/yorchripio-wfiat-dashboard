@@ -17,6 +17,7 @@ import { WmxnRendimientoCard } from "@/components/wmxn/WmxnRendimientoCard";
 import { WcopDataSection } from "@/components/wcop/WcopDataSection";
 import { WcopRendimientoCard } from "@/components/wcop/WcopRendimientoCard";
 import { WpenDataSection } from "@/components/wpen/WpenDataSection";
+import { WclpDataSection } from "@/components/wclp/WclpDataSection";
 
 export default function ColateralPage(): React.ReactElement {
   const [selectedAsset, setSelectedAsset] = useState("wARS");
@@ -26,6 +27,7 @@ export default function ColateralPage(): React.ReactElement {
     { id: "wMXN", label: "wMXN", available: true },
     { id: "wCOP", label: "wCOP", available: true },
     { id: "wPEN", label: "wPEN", available: true },
+    { id: "wCLP", label: "wCLP", available: true },
   ];
   const [collateralData, setCollateralData] = useState<ColateralData | null>(null);
   const [rendimientoData, setRendimientoData] = useState<RendimientoDiario[]>([]);
@@ -90,6 +92,7 @@ export default function ColateralPage(): React.ReactElement {
                 {selectedAsset === "wMXN" && "Gestión de colateral wMXN — Fondo REGIO1 en Banregio"}
                 {selectedAsset === "wCOP" && "Gestión de colateral wCOP — Cuenta ahorro en Finandina"}
                 {selectedAsset === "wPEN" && "Gestión de colateral wPEN — Balance en Buda.com"}
+                {selectedAsset === "wCLP" && "Gestión de colateral wCLP — Balance en Buda.com Chile"}
                 {selectedAsset === "wARS" && "Composición del colateral y rendimientos por instrumento"}
               </p>
             </div>
@@ -122,6 +125,10 @@ export default function ColateralPage(): React.ReactElement {
         ) : selectedAsset === "wPEN" ? (
           <div className="space-y-6">
             <WpenDataSection key={`wpen-data-${refreshKey}`} />
+          </div>
+        ) : selectedAsset === "wCLP" ? (
+          <div className="space-y-6">
+            <WclpDataSection key={`wclp-data-${refreshKey}`} />
           </div>
         ) : (
         <>

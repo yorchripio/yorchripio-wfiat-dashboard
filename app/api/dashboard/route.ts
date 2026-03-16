@@ -12,6 +12,7 @@ import { getRendimientoDataFromDB } from "@/lib/db/rendimiento";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { prisma } from "@/lib/db";
 import { getPenBalance } from "@/lib/wpen/buda-client";
+import { getClpBalance } from "@/lib/wclp/buda-chile-client";
 
 interface DashboardPayload {
   supplyData: Awaited<ReturnType<typeof getTotalSupply>>;
@@ -189,6 +190,38 @@ async function getWpenCollateralData(): Promise<ColateralData | null> {
   }
 }
 
+/** Build ColateralData for wCLP from Buda.com Chile balance (no yield) */
+async function getWclpCollateralData(): Promise<ColateralData | null> {
+  try {
+    const balance = await getClpBalance();
+    if (balance.amount <= 0) return null;
+
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      fecha: today,
+      instrumentos: [
+        {
+          id: "buda-clp",
+          nombre: "Balance Buda.com Chile (a la vista)",
+          tipo: "A_la_Vista" as const,
+          entidad: "Buda.com Chile",
+          valorTotal: balance.amount,
+          porcentaje: 100,
+          rendimientoDiario: 0,
+          activo: true,
+        },
+      ],
+      total: balance.amount,
+      totalFormatted: `$ ${Math.round(balance.amount).toLocaleString("es-CL")}`,
+      timestamp: new Date().toISOString(),
+      rendimientoCartera: 0,
+    };
+  } catch (err) {
+    console.error("[wCLP collateral] Error fetching Buda Chile balance:", err);
+    return null;
+  }
+}
+
 /** Build ColateralData for wBRL from CDB positions in DB */
 async function getWbrlCollateralData(): Promise<ColateralData | null> {
   const latestPos = await prisma.wbrlCdbPosition.findFirst({
@@ -246,6 +279,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         case "wMXN": return getWmxnCollateralData();
         case "wCOP": return getWcopCollateralData();
         case "wPEN": return getWpenCollateralData();
+        case "wCLP": return getWclpCollateralData();
         default: return getCollateralDataFromDB();
       }
     };
@@ -275,6 +309,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         wMXN: "No hay posiciones wMXN cargadas. Subí el Estado de Cuenta de Banregio en Colateral.",
         wCOP: "No hay snapshots wCOP cargados. Subí el CSV de Finandina en Colateral.",
         wPEN: "No se pudo obtener el balance de Buda.com. Verificá las API keys.",
+        wCLP: "No se pudo obtener el balance de Buda.com Chile. Verificá las API keys.",
       };
       return NextResponse.json(
         {
