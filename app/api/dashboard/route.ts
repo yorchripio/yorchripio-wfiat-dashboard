@@ -13,6 +13,8 @@ import { type ColateralData } from "@/lib/sheets/collateral";
 import { prisma } from "@/lib/db";
 import { getPenBalance } from "@/lib/wpen/buda-client";
 import { getClpBalance } from "@/lib/wclp/buda-chile-client";
+import { fetchAdcapCuotaparte } from "@/lib/cafci/client";
+import { calculateAndSaveRendimiento } from "@/lib/db/rendimiento-calc";
 
 interface DashboardPayload {
   supplyData: Awaited<ReturnType<typeof getTotalSupply>>;
@@ -264,6 +266,75 @@ async function getWbrlCollateralData(): Promise<ColateralData | null> {
   };
 }
 
+/** Auto-update FCI cuotaparte from CAFCI if not already updated today */
+async function tryUpdateCafci(): Promise<void> {
+  const latestFci = await prisma.collateralAllocation.findFirst({
+    where: { asset: "wARS", tipo: "FCI", activo: true },
+    orderBy: { fecha: "desc" },
+  });
+  if (!latestFci) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const latestDate = latestFci.fecha.toISOString().slice(0, 10);
+
+  // Already updated today → skip
+  if (latestDate === today) return;
+
+  const cafci = await fetchAdcapCuotaparte();
+  if (!cafci) return;
+
+  // If CAFCI date is same as latest allocation date → already up to date
+  if (cafci.fecha === latestDate && Math.abs(Number(latestFci.valorCuotaparte) - cafci.vcp) < 0.001) {
+    return;
+  }
+
+  const cafciFecha = new Date(cafci.fecha + "T00:00:00.000Z");
+
+  // Copy all active allocations from latest date to CAFCI date with updated vcp
+  const allLatest = await prisma.collateralAllocation.findMany({
+    where: { asset: "wARS", fecha: latestFci.fecha, activo: true },
+  });
+
+  for (const alloc of allLatest) {
+    const isFci = alloc.tipo === "FCI";
+    const newVcp = isFci ? cafci.vcp : Number(alloc.valorCuotaparte);
+
+    const existing = await prisma.collateralAllocation.findFirst({
+      where: { asset: "wARS", tipo: alloc.tipo, fecha: cafciFecha, activo: true },
+    });
+
+    if (existing) {
+      if (isFci && Math.abs(Number(existing.valorCuotaparte) - newVcp) > 0.001) {
+        await prisma.collateralAllocation.update({
+          where: { id: existing.id },
+          data: { valorCuotaparte: newVcp },
+        });
+      }
+    } else {
+      await prisma.collateralAllocation.create({
+        data: {
+          asset: "wARS",
+          tipo: alloc.tipo,
+          nombre: alloc.nombre,
+          entidad: alloc.entidad,
+          cantidadCuotasPartes: Number(alloc.cantidadCuotasPartes),
+          valorCuotaparte: newVcp,
+          fecha: cafciFecha,
+          activo: true,
+        },
+      });
+    }
+  }
+
+  try {
+    await calculateAndSaveRendimiento(cafciFecha);
+  } catch (err) {
+    console.warn("[CAFCI auto-update] rendimiento calc error:", err);
+  }
+
+  console.log(`[CAFCI auto-update] Updated wARS FCI vcp=${cafci.vcp} for ${cafci.fecha}`);
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await auth();
@@ -272,6 +343,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const asset = (request.nextUrl.searchParams.get("asset") || "wARS") as AssetSymbol;
+
+    // Auto-update cuotaparte from CAFCI for wARS (best-effort, don't block)
+    if (asset === "wARS") {
+      try {
+        await tryUpdateCafci();
+      } catch (err) {
+        console.error("[dashboard] CAFCI auto-update error (non-blocking):", err);
+      }
+    }
 
     const getCollateral = () => {
       switch (asset) {
