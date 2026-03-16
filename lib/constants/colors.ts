@@ -30,6 +30,9 @@ export const BRAND_COLORS = {
 export const CHART_TOKEN_COLORS: Record<string, string> = {
   wARS: "#006bb7", // Vercel blues.6
   wBRL: "#0fb800", // Vercel greens.6
+  wMXN: "#006341", // Verde mexicano
+  wCOP: "#d4a017", // Dorado colombiano
+  wPEN: "#d91023", // Rojo peruano
 };
 
 /** Color para líneas/áreas de gráficos según el token seleccionado. Por defecto wARS (azul). */

@@ -15,6 +15,8 @@ interface RatioCardProps {
   lastUpdate: string;
   /** Token seleccionado (wARS, wBRL…) para color de acento en la card */
   tokenId?: string;
+  /** Código de moneda para mostrar (default "ARS") */
+  currencyCode?: string;
 }
 
 export function RatioCard({
@@ -23,6 +25,7 @@ export function RatioCard({
   collateralTotal,
   lastUpdate,
   tokenId = "wARS",
+  currencyCode = "ARS",
 }: RatioCardProps) {
   const chartColor = getChartColorForToken(tokenId);
 
@@ -148,14 +151,14 @@ export function RatioCard({
           <div>
             <p className="text-sm text-[#010103]/60">Colateral Total</p>
             <p className="text-xl font-semibold text-[#010103]">
-              {formatCurrency(collateralTotal)} ARS
+              {formatCurrency(collateralTotal)} {currencyCode}
             </p>
           </div>
 
           <div>
             <p className="text-sm text-[#010103]/60">Buffer</p>
             <p className={`text-xl font-semibold ${buffer >= 0 ? "text-green-600" : "text-red-600"}`}>
-              {buffer >= 0 ? "+" : ""}{formatCurrency(buffer)} ARS
+              {buffer >= 0 ? "+" : ""}{formatCurrency(buffer)} {currencyCode}
             </p>
           </div>
         </div>

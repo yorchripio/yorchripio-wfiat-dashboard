@@ -22,11 +22,9 @@ interface SupplyDistributionChartProps {
   tokenId?: string;
 }
 
-const CHART_TOKEN = "wARS";
-
 export function SupplyDistributionChart({
   supplyData,
-  tokenId = CHART_TOKEN,
+  tokenId = "wARS",
 }: SupplyDistributionChartProps) {
   const chartColor = getChartColorForToken(tokenId);
   // Preparar datos para el gráfico (solo chains exitosas)
@@ -59,7 +57,7 @@ export function SupplyDistributionChart({
 
   // Formatear números en formato argentino
   const formatSupply = (value: number) => {
-    return `${value.toLocaleString("es-AR", { maximumFractionDigits: 0 })} wARS`;
+    return `${value.toLocaleString("es-AR", { maximumFractionDigits: 0 })} ${tokenId}`;
   };
 
   // Tooltip personalizado

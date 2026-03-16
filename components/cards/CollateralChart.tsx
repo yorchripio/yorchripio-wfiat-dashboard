@@ -21,6 +21,8 @@ interface CollateralChartProps {
   total: number;
   /** Token seleccionado (wARS, wBRL…) para color del gráfico */
   tokenId?: string;
+  /** Código de moneda para formateo (ARS, BRL) */
+  currencyCode?: string;
 }
 
 // Nombres más amigables para mostrar
@@ -28,6 +30,7 @@ const NOMBRES_CORTOS: Record<string, string> = {
   FCI: "FCI Adcap",
   Cuenta_Remunerada: "Cta. Remunerada",
   A_la_Vista: "Saldo Vista",
+  CDB: "CDB 99% CDI",
 };
 
 /** Opacidades para distinguir segmentos del pie manteniendo el color del token */
@@ -40,7 +43,7 @@ function hexWithOpacity(hex: string, opacity: number): string {
   return `rgba(${r},${g},${b},${opacity})`;
 }
 
-export function CollateralChart({ instrumentos, total, tokenId = "wARS" }: CollateralChartProps) {
+export function CollateralChart({ instrumentos, total, tokenId = "wARS", currencyCode = "ARS" }: CollateralChartProps) {
   const chartColor = getChartColorForToken(tokenId);
 
   // Preparar datos para el gráfico (solo instrumentos activos)
@@ -54,9 +57,13 @@ export function CollateralChart({ instrumentos, total, tokenId = "wARS" }: Colla
       rendimiento: inst.rendimientoDiario,
     }));
 
-  // Formatear números en formato argentino
+  // Formatear números según moneda
   const formatCurrency = (value: number) => {
-    return `$${value.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
+    const prefixMap: Record<string, string> = { BRL: "R$", ARS: "$", MXN: "$", COP: "$" };
+    const localeMap: Record<string, string> = { BRL: "pt-BR", ARS: "es-AR", MXN: "es-MX", COP: "es-CO" };
+    const prefix = prefixMap[currencyCode] ?? "$";
+    const locale = localeMap[currencyCode] ?? "es-AR";
+    return `${prefix} ${value.toLocaleString(locale, { maximumFractionDigits: 0 })}`;
   };
 
   // Tooltip personalizado

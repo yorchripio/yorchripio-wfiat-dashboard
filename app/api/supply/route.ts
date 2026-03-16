@@ -1,17 +1,19 @@
 // app/api/supply/route.ts
 // Endpoint que retorna el supply de wARS en las 3 chains
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getTotalSupply } from "@/lib/blockchain/supply";
+import { type AssetSymbol } from "@/lib/blockchain/config";
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
     }
-    const supplyData = await getTotalSupply();
+    const asset = (request.nextUrl.searchParams.get("asset") || "wARS") as AssetSymbol;
+    const supplyData = await getTotalSupply(asset);
 
     if (!supplyData.allSuccessful) {
       const failed = (["ethereum", "worldchain", "base"] as const).filter(

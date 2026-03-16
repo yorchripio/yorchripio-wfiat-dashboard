@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TokenLogo } from "@/components/ui/TokenLogo";
+// WbrlDataSection moved to Colateral page
 
 type InstrumentoTipo = "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
 
@@ -1095,6 +1096,8 @@ export default function DataPage(): React.ReactElement {
             </div>
           )}
         </section>
+
+        {/* wBRL uploads moved to Colateral page */}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 // Funciones para consultar el supply de wARS en las 3 chains
 
 import { ethers } from "ethers";
-import { WARS_CONFIG, CHAINS, ERC20_ABI, type ChainName } from "./config";
+import { WARS_CONFIG, CHAINS, ERC20_ABI, TOKEN_CONFIGS, type ChainName, type AssetSymbol } from "./config";
 
 // Tipo para el resultado de una chain individual
 export interface ChainSupply {
@@ -39,14 +39,15 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 async function querySupplyFromRpc(
   chainName: ChainName,
-  rpcUrl: string
+  rpcUrl: string,
+  tokenAddress: string = WARS_CONFIG.address
 ): Promise<ChainSupply> {
   const chain = CHAINS[chainName];
   const provider = new ethers.JsonRpcProvider(rpcUrl, chain.id, {
     staticNetwork: true,
   });
   const contract = new ethers.Contract(
-    WARS_CONFIG.address,
+    tokenAddress,
     ERC20_ABI,
     provider
   );
@@ -69,11 +70,23 @@ async function querySupplyFromRpc(
 }
 
 /**
- * Obtiene el supply de wARS en una chain específica.
+ * Obtiene el supply de un token en una chain específica.
  * Prueba múltiples RPCs configurados para esa chain en orden.
  */
-async function getSupplyFromChain(chainName: ChainName): Promise<ChainSupply> {
+async function getSupplyFromChain(chainName: ChainName, tokenAddress: string = WARS_CONFIG.address): Promise<ChainSupply> {
   const chain = CHAINS[chainName];
+
+  // Token not deployed on this chain — return 0 supply as success (not an error)
+  if (!tokenAddress) {
+    return {
+      chain: chainName,
+      chainName: chain.name,
+      supply: 0,
+      supplyRaw: "0",
+      success: true, // Not a failure, just not deployed
+    };
+  }
+
   const rpcUrls = chain.rpcUrls.length > 0
     ? chain.rpcUrls
     : (chain.rpcUrl ? [chain.rpcUrl] : []);
@@ -93,7 +106,7 @@ async function getSupplyFromChain(chainName: ChainName): Promise<ChainSupply> {
   for (const rpcUrl of rpcUrls) {
     try {
       return await withTimeout(
-        querySupplyFromRpc(chainName, rpcUrl),
+        querySupplyFromRpc(chainName, rpcUrl, tokenAddress),
         CHAIN_REQUEST_TIMEOUT_MS
       );
     } catch (error) {
@@ -114,13 +127,21 @@ async function getSupplyFromChain(chainName: ChainName): Promise<ChainSupply> {
 }
 
 /**
- * Obtiene el supply total de wARS sumando las 3 chains.
+ * Obtiene el supply total de un token sumando las 3 chains.
  * Reintenta hasta MAX_RETRIES veces las chains que fallen.
  */
-export async function getTotalSupply(): Promise<TotalSupply> {
+function getTokenAddressForChain(asset: AssetSymbol, chain: ChainName): string {
+  const config = TOKEN_CONFIGS[asset];
+  if ("chainAddresses" in config && config.chainAddresses[chain]) {
+    return config.chainAddresses[chain];
+  }
+  return config.address;
+}
+
+export async function getTotalSupply(asset: AssetSymbol = "wARS"): Promise<TotalSupply> {
   const chainNames: ChainName[] = ["ethereum", "worldchain", "base"];
   const initialResults = await Promise.all(
-    chainNames.map((name) => getSupplyFromChain(name))
+    chainNames.map((name) => getSupplyFromChain(name, getTokenAddressForChain(asset, name)))
   );
 
   const byName: Record<ChainName, ChainSupply> = {
@@ -133,7 +154,7 @@ export async function getTotalSupply(): Promise<TotalSupply> {
     const failed = chainNames.filter((name) => !byName[name].success);
     if (failed.length === 0) break;
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-    const retries = await Promise.all(failed.map((name) => getSupplyFromChain(name)));
+    const retries = await Promise.all(failed.map((name) => getSupplyFromChain(name, getTokenAddressForChain(asset, name))));
     failed.forEach((name, i) => {
       if (retries[i].success) {
         byName[name] = retries[i];
@@ -157,6 +178,6 @@ export async function getTotalSupply(): Promise<TotalSupply> {
  * Formatea un número de supply para mostrar en la UI.
  * Ej: 100000000 -> "100,000,000 wARS"
  */
-export function formatSupply(supply: number): string {
-  return `${supply.toLocaleString("es-AR", { maximumFractionDigits: 0 })} wARS`;
+export function formatSupply(supply: number, asset: AssetSymbol = "wARS"): string {
+  return `${supply.toLocaleString("es-AR", { maximumFractionDigits: 0 })} ${asset}`;
 }

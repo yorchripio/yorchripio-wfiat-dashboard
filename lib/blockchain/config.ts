@@ -1,5 +1,5 @@
 // lib/blockchain/config.ts
-// Configuración de wARS y las blockchains soportadas
+// Configuración de tokens wFIAT y las blockchains soportadas
 
 export const WARS_CONFIG = {
   name: "Wrapped Argentine Peso",
@@ -7,6 +7,60 @@ export const WARS_CONFIG = {
   address: "0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D",
   decimals: 18,
 } as const;
+
+export const WBRL_CONFIG = {
+  name: "Wrapped Brazilian Real",
+  symbol: "wBRL",
+  address: "0xD76f5Faf6888e24D9F04Bf92a0c8B921FE4390e0",
+  decimals: 18,
+} as const;
+
+export const WMXN_CONFIG = {
+  name: "Wrapped Mexican Peso",
+  symbol: "wMXN",
+  address: "0x337e7456b420bd3481e7fa61fa9850343d610d34", // World Chain only
+  decimals: 18,
+  // Only deployed on World Chain
+  chainAddresses: {
+    ethereum: "",
+    worldchain: "0x337e7456b420bd3481e7fa61fa9850343d610d34",
+    base: "",
+  },
+} as const;
+
+export const WCOP_CONFIG = {
+  name: "Wrapped Colombian Peso",
+  symbol: "wCOP",
+  address: "0x8a1d45e102e886510e891d2ec656a708991e2d76", // World Chain only
+  decimals: 18,
+  chainAddresses: {
+    ethereum: "",
+    worldchain: "0x8a1d45e102e886510e891d2ec656a708991e2d76",
+    base: "",
+  },
+} as const;
+
+export const WPEN_CONFIG = {
+  name: "Wrapped Peruvian Sol",
+  symbol: "wPEN",
+  address: "0x4f34c8b3b5fb6d98da888f0fea543d4d9c9f2ebe", // World Chain only
+  decimals: 18,
+  chainAddresses: {
+    ethereum: "",
+    worldchain: "0x4f34c8b3b5fb6d98da888f0fea543d4d9c9f2ebe",
+    base: "",
+  },
+} as const;
+
+export const TOKEN_CONFIGS = {
+  wARS: WARS_CONFIG,
+  wBRL: WBRL_CONFIG,
+  wMXN: WMXN_CONFIG,
+  wCOP: WCOP_CONFIG,
+  wPEN: WPEN_CONFIG,
+} as const;
+
+export type AssetSymbol = keyof typeof TOKEN_CONFIGS;
 
 function parseRpcUrls(primary: string | undefined, fallbacks: string | undefined): string[] {
   const all = [

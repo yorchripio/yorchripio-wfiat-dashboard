@@ -9,8 +9,24 @@ import { type ColateralData } from "@/lib/sheets/collateral";
 import { type RendimientoDiario } from "@/lib/sheets/rendimiento";
 import { type HistoricalDataPoint } from "@/lib/sheets/history";
 import { RefreshCw } from "lucide-react";
+import { TokenSelect } from "@/components/ui/TokenSelect";
+import { WbrlDataSection } from "@/components/wbrl/WbrlDataSection";
+import { WbrlRendimientoCard } from "@/components/wbrl/WbrlRendimientoCard";
+import { WmxnDataSection } from "@/components/wmxn/WmxnDataSection";
+import { WmxnRendimientoCard } from "@/components/wmxn/WmxnRendimientoCard";
+import { WcopDataSection } from "@/components/wcop/WcopDataSection";
+import { WcopRendimientoCard } from "@/components/wcop/WcopRendimientoCard";
+import { WpenDataSection } from "@/components/wpen/WpenDataSection";
 
 export default function ColateralPage(): React.ReactElement {
+  const [selectedAsset, setSelectedAsset] = useState("wARS");
+  const assetOptions = [
+    { id: "wARS", label: "wARS", available: true },
+    { id: "wBRL", label: "wBRL", available: true },
+    { id: "wMXN", label: "wMXN", available: true },
+    { id: "wCOP", label: "wCOP", available: true },
+    { id: "wPEN", label: "wPEN", available: true },
+  ];
   const [collateralData, setCollateralData] = useState<ColateralData | null>(null);
   const [rendimientoData, setRendimientoData] = useState<RendimientoDiario[]>([]);
   const [tiposQueRinden, setTiposQueRinden] = useState<string[]>([]);
@@ -18,6 +34,9 @@ export default function ColateralPage(): React.ReactElement {
   const [supplyTotal, setSupplyTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Increment to force rendimiento cards to re-fetch after confirm
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleDataConfirmed = () => setRefreshKey((k) => k + 1);
 
   const fetchData = async (): Promise<void> => {
     setLoading(true);
@@ -63,14 +82,49 @@ export default function ColateralPage(): React.ReactElement {
     <div className="min-h-screen">
       <header className="border-b border-[#010103]/10 bg-[#FFFFFF] py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl font-bold text-[#010103]">Colateral</h1>
-          <p className="text-[#010103]/70 mt-1">
-            Composición del colateral y rendimientos por instrumento
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-[#010103]">Colateral</h1>
+              <p className="text-[#010103]/70 mt-1">
+                {selectedAsset === "wBRL" && "Gestión de colateral wBRL — CDBs en Banco Genial"}
+                {selectedAsset === "wMXN" && "Gestión de colateral wMXN — Fondo REGIO1 en Banregio"}
+                {selectedAsset === "wCOP" && "Gestión de colateral wCOP — Cuenta ahorro en Finandina"}
+                {selectedAsset === "wPEN" && "Gestión de colateral wPEN — Balance en Buda.com"}
+                {selectedAsset === "wARS" && "Composición del colateral y rendimientos por instrumento"}
+              </p>
+            </div>
+            <TokenSelect
+              value={selectedAsset}
+              options={assetOptions}
+              onChange={setSelectedAsset}
+              className="w-[160px]"
+            />
+          </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {selectedAsset === "wBRL" ? (
+          <div className="space-y-6">
+            <WbrlRendimientoCard key={`wbrl-rend-${refreshKey}`} />
+            <WbrlDataSection onConfirmed={handleDataConfirmed} />
+          </div>
+        ) : selectedAsset === "wMXN" ? (
+          <div className="space-y-6">
+            <WmxnRendimientoCard key={`wmxn-rend-${refreshKey}`} />
+            <WmxnDataSection onConfirmed={handleDataConfirmed} />
+          </div>
+        ) : selectedAsset === "wCOP" ? (
+          <div className="space-y-6">
+            <WcopRendimientoCard key={`wcop-rend-${refreshKey}`} />
+            <WcopDataSection onConfirmed={handleDataConfirmed} />
+          </div>
+        ) : selectedAsset === "wPEN" ? (
+          <div className="space-y-6">
+            <WpenDataSection key={`wpen-data-${refreshKey}`} />
+          </div>
+        ) : (
+        <>
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
             {error}
@@ -116,6 +170,8 @@ export default function ColateralPage(): React.ReactElement {
             </div>
           </div>
         ) : null}
+        </>
+        )}
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import { parseSheetDateParts, sheetDateToKey, sheetDateToDate } from "./sheet-da
 export interface InstrumentoColateral {
   id: string;
   nombre: string;
-  tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
+  tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB";
   entidad: string;
   valorTotal: number;
   porcentaje: number;
@@ -188,7 +188,7 @@ export interface CollateralRowFromSheet {
   dateKey: string;
   fecha: Date;
   instrumentos: Array<{
-    tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
+    tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB";
     nombre: string;
     entidad: string;
     valorTotal: number;
@@ -205,7 +205,7 @@ const FCI_CUOTAPARTE_ROW_INDEX = 19; // 0-based → fila 20
 /** Mapeo fila del sheet -> tipo y datos del instrumento (igual que getCollateralData) */
 const SHEET_ROW_TO_INSTRUMENT: Array<{
   rowIndex: number;
-  tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista";
+  tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB";
   nombre: string;
   entidad: string;
 }> = [

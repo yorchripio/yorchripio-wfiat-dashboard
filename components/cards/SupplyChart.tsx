@@ -19,9 +19,10 @@ import {
 
 interface SupplyChartProps {
   supplyData: TotalSupply;
+  tokenId?: string;
 }
 
-export function SupplyChart({ supplyData }: SupplyChartProps) {
+export function SupplyChart({ supplyData, tokenId = "wARS" }: SupplyChartProps) {
   // Preparar datos para el gráfico
   const chartData = [
     {
@@ -43,7 +44,7 @@ export function SupplyChart({ supplyData }: SupplyChartProps) {
 
   // Formatear números en formato argentino
   const formatSupply = (value: number) => {
-    return `${value.toLocaleString("es-AR", { maximumFractionDigits: 0 })} wARS`;
+    return `${value.toLocaleString("es-AR", { maximumFractionDigits: 0 })} ${tokenId}`;
   };
 
   // Tooltip personalizado

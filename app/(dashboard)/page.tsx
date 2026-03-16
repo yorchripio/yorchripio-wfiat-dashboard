@@ -74,18 +74,22 @@ function formatLastUpdate(timestamp: string): string {
 export default function Dashboard(): React.ReactElement {
   const [selectedStable, setSelectedStable] = useState("wARS");
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const dashboardUrl = selectedStable === "wARS" ? "/api/dashboard" : `/api/dashboard?asset=${selectedStable}`;
   const {
     data: dashboardData,
     error,
     isLoading,
     isValidating,
     mutate,
-  } = useSWR<DashboardPayload>("/api/dashboard", fetchDashboard, {
-    keepPreviousData: true,
+  } = useSWR<DashboardPayload>(dashboardUrl, fetchDashboard, {
+    keepPreviousData: false,
     refreshInterval: 5 * 60 * 1000,
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   });
+
+  const currencyMap: Record<string, string> = { wARS: "ARS", wBRL: "BRL", wMXN: "MXN", wCOP: "COP", wPEN: "PEN" };
+  const currencyCode = currencyMap[selectedStable] ?? "ARS";
 
   const supplyData = dashboardData?.supplyData ?? null;
   const collateralData = dashboardData?.collateralData ?? null;
@@ -121,7 +125,10 @@ export default function Dashboard(): React.ReactElement {
 
   const stablecoins = [
     { id: "wARS", label: "wARS", available: true },
-    { id: "wBRL", label: "wBRL", available: false, disabledLabel: "(v2.1)" },
+    { id: "wBRL", label: "wBRL", available: true },
+    { id: "wMXN", label: "wMXN", available: true },
+    { id: "wCOP", label: "wCOP", available: true },
+    { id: "wPEN", label: "wPEN", available: true },
   ];
 
   return (
@@ -143,7 +150,9 @@ export default function Dashboard(): React.ReactElement {
               />
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-[#010103]/70">Argentina 🇦🇷</span>
+              <span className="text-sm text-[#010103]/70">
+                {{ wARS: "Argentina", wBRL: "Brasil", wMXN: "México", wCOP: "Colombia", wPEN: "Perú" }[selectedStable] ?? selectedStable}
+              </span>
               {dashboardData && (
                 <span
                   className={`text-xs px-2 py-1 rounded-md border ${
@@ -169,6 +178,7 @@ export default function Dashboard(): React.ReactElement {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <>
         {staleMessage && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
             <p className="font-medium">{staleMessage}</p>
@@ -206,13 +216,15 @@ export default function Dashboard(): React.ReactElement {
               collateralTotal={collateralTotal}
               lastUpdate={lastUpdate}
               tokenId={selectedStable}
+              currencyCode={currencyCode}
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <SupplyChart supplyData={supplyData} />
+              <SupplyChart supplyData={supplyData} tokenId={selectedStable} />
               <CollateralChart
                 instrumentos={collateralData.instrumentos}
                 total={collateralData.total}
                 tokenId={selectedStable}
+                currencyCode={currencyCode}
               />
             </div>
             <SupplyDistributionChart supplyData={supplyData} tokenId={selectedStable} />
@@ -221,13 +233,14 @@ export default function Dashboard(): React.ReactElement {
                 Supply por Blockchain
               </h2>
               <div className="space-y-4">
-                <SupplyCard data={supplyData.chains.ethereum} />
-                <SupplyCard data={supplyData.chains.worldchain} />
-                <SupplyCard data={supplyData.chains.base} />
+                <SupplyCard data={supplyData.chains.ethereum} tokenId={selectedStable} />
+                <SupplyCard data={supplyData.chains.worldchain} tokenId={selectedStable} />
+                <SupplyCard data={supplyData.chains.base} tokenId={selectedStable} />
               </div>
             </div>
           </div>
         )}
+        </>
       </div>
     </div>
   );

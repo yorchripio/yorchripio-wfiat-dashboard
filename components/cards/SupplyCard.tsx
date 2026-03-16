@@ -12,9 +12,10 @@ import { CHAIN_CARD_COLORS } from "@/lib/constants/colors";
 
 interface SupplyCardProps {
   data: ChainSupply;
+  tokenId?: string;
 }
 
-export function SupplyCard({ data }: SupplyCardProps) {
+export function SupplyCard({ data, tokenId = "wARS" }: SupplyCardProps) {
   const colors = CHAIN_CARD_COLORS[data.chain] || CHAIN_CARD_COLORS.ethereum;
 
   // Formatear el supply con separador de miles argentino
@@ -40,8 +41,8 @@ export function SupplyCard({ data }: SupplyCardProps) {
         <div>
           <p className="text-3xl font-bold text-[#010103]">{supplyFormatted}</p>
           <div className="flex items-center gap-1.5 mt-1">
-            <TokenLogo tokenId="wARS" size={18} />
-            <p className="text-sm text-[#010103]/60">wARS</p>
+            <TokenLogo tokenId={tokenId} size={18} />
+            <p className="text-sm text-[#010103]/60">{tokenId}</p>
           </div>
         </div>
       ) : (

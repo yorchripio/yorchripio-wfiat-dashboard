@@ -24,6 +24,7 @@ enum InstrumentoTipo {
   FCI
   Cuenta_Remunerada
   A_la_Vista
+  CDB
 }
 
 // ─── MODELS ───
@@ -117,4 +118,83 @@ model CollateralAllocation {
   @@index([asset, fecha])
   @@index([fecha])
   @@map("collateral_allocations")
+}
+
+/// Posición CDB parseada del PDF de Renda Fixa (Banco Genial).
+/// Cada fila es un CDB individual con su valor actual.
+model WbrlCdbPosition {
+  id              String   @id @default(uuid())
+  fechaPosicao    DateTime @db.Date @map("fecha_posicao")    // Fecha del reporte
+  fechaInicio     DateTime @db.Date @map("fecha_inicio")     // Fecha inicio del CDB
+  fechaVencimento DateTime @db.Date @map("fecha_vencimento") // Fecha vencimiento
+  capitalInicial  Decimal  @db.Decimal(18, 2) @map("capital_inicial")
+  valorBruto      Decimal  @db.Decimal(18, 2) @map("valor_bruto")
+  valorLiquido    Decimal  @db.Decimal(18, 2) @map("valor_liquido")
+  ir              Decimal  @db.Decimal(18, 2)
+  indexador       String   @default("CDICETIP")
+  pctIndexador    Decimal  @db.Decimal(5, 1) @map("pct_indexador") // 99.0
+  emisor          String   @default("BANCO GENIAL S.A.")
+  esColateral     Boolean  @default(true) @map("es_colateral")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([fechaPosicao])
+  @@index([esColateral, fechaPosicao])
+  @@map("wbrl_cdb_positions")
+}
+
+/// Movimientos del extracto de conta corrente (Banco Genial).
+model WbrlExtrato {
+  id          String   @id @default(uuid())
+  fecha       DateTime @db.Date
+  descripcion String
+  valor       Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([fecha])
+  @@map("wbrl_extracto")
+}
+
+/// Posición mensual del fondo REGIO1 (Banregio) para wMXN.
+/// Cada fila es un snapshot mensual del estado de cuenta.
+model WmxnFundPosition {
+  id                 String   @id @default(uuid())
+  fechaReporte       DateTime @db.Date @map("fecha_reporte")      // Fin de periodo
+  periodoInicio      DateTime @db.Date @map("periodo_inicio")
+  periodoFin         DateTime @db.Date @map("periodo_fin")
+  fondo              String   @default("REGIO1")
+  serie              String   @default("M")
+  titulosInicio      Int      @map("titulos_inicio")
+  titulosCierre      Int      @map("titulos_cierre")
+  precioValuacion    Decimal  @db.Decimal(12, 6) @map("precio_valuacion")
+  valorCartera       Decimal  @db.Decimal(18, 2) @map("valor_cartera")
+  movimientosNetos   Decimal  @db.Decimal(18, 2) @map("movimientos_netos")
+  plusvalia           Decimal  @db.Decimal(18, 2)
+  rendimientoAnual   Decimal? @db.Decimal(6, 2) @map("rendimiento_anual")
+  rendimientoMensual Decimal? @db.Decimal(6, 2) @map("rendimiento_mensual")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([fechaReporte])
+  @@map("wmxn_fund_positions")
+}
+
+/// Snapshot mensual de la cuenta de ahorro Finandina para wCOP.
+/// Resumen derivado del CSV extracto bancario.
+model WcopAccountSnapshot {
+  id              String   @id @default(uuid())
+  fechaCorte      DateTime @db.Date @map("fecha_corte")       // Fecha del último movimiento
+  periodoInicio   DateTime @db.Date @map("periodo_inicio")
+  periodoFin      DateTime @db.Date @map("periodo_fin")
+  saldoFinal      Decimal  @db.Decimal(18, 2) @map("saldo_final")
+  capitalWcop     Decimal  @db.Decimal(18, 2) @map("capital_wcop")    // Total depósitos WCOP identificados
+  rendimientos    Decimal  @db.Decimal(18, 2)                         // Total intereses ganados
+  retirosMM       Decimal  @db.Decimal(18, 2) @map("retiros_mm")     // Total retiros Market Making
+  depositosMM     Decimal  @db.Decimal(18, 2) @map("depositos_mm")   // Total depósitos MM (Koywe)
+  impuestos       Decimal  @db.Decimal(18, 2)                         // Gravamen 4x1000
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([fechaCorte])
+  @@map("wcop_account_snapshots")
 }

@@ -9,7 +9,7 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { getTotalSupply } from "@/lib/blockchain/supply";
 import { prisma } from "@/lib/db";
 
-const ASSET = "wARS";
+const ASSETS = ["wARS", "wBRL"] as const;
 const TZ_ART = "America/Argentina/Buenos_Aires";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -32,85 +32,86 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const supplyData = await getTotalSupply();
-
-    if (!supplyData.allSuccessful) {
-      const failed = (["ethereum", "worldchain", "base"] as const).filter(
-        (c) => !supplyData.chains[c].success
-      );
-      console.warn(`[cron/supply-snapshot] Supply incompleto, no se guarda snapshot. Fallaron: ${failed.join(", ")}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Supply incompleto: fallaron ${failed.join(", ")}. No se guardó snapshot.`,
-        },
-        { status: 503 }
-      );
-    }
-
     const now = new Date();
     const dateKey = formatInTimeZone(now, TZ_ART, "yyyy-MM-dd");
     const snapshotAt = fromZonedTime(
       new Date(dateKey + "T00:00:00"),
       TZ_ART
     );
-    const snapshotId = `cron-${ASSET}-${dateKey}`;
 
-    await prisma.supplySnapshot.upsert({
-      where: { id: snapshotId },
-      create: {
-        id: snapshotId,
-        asset: ASSET,
-        total: supplyData.total,
-        chainsJson: {
-          ethereum: {
-            supply: supplyData.chains.ethereum.supply,
-            success: supplyData.chains.ethereum.success,
-          },
-          worldchain: {
-            supply: supplyData.chains.worldchain.supply,
-            success: supplyData.chains.worldchain.success,
-          },
-          base: {
-            supply: supplyData.chains.base.supply,
-            success: supplyData.chains.base.success,
-          },
-          source: "cron",
-        },
-        snapshotAt,
-      },
-      update: {
-        total: supplyData.total,
-        chainsJson: {
-          ethereum: {
-            supply: supplyData.chains.ethereum.supply,
-            success: supplyData.chains.ethereum.success,
-          },
-          worldchain: {
-            supply: supplyData.chains.worldchain.supply,
-            success: supplyData.chains.worldchain.success,
-          },
-          base: {
-            supply: supplyData.chains.base.supply,
-            success: supplyData.chains.base.success,
-          },
-          source: "cron",
-        },
-        snapshotAt,
-      },
-    });
+    const results: Record<string, { total: number; success: boolean; error?: string }> = {};
 
-    console.log(`[cron/supply-snapshot] Snapshot guardado: ${dateKey}, total=${supplyData.total}`);
+    for (const asset of ASSETS) {
+      try {
+        const supplyData = await getTotalSupply(asset);
+
+        if (!supplyData.allSuccessful) {
+          const failed = (["ethereum", "worldchain", "base"] as const).filter(
+            (c) => !supplyData.chains[c].success
+          );
+          console.warn(`[cron/supply-snapshot] ${asset} supply incompleto. Fallaron: ${failed.join(", ")}`);
+          results[asset] = { total: 0, success: false, error: `Fallaron: ${failed.join(", ")}` };
+          continue;
+        }
+
+        const snapshotId = `cron-${asset}-${dateKey}`;
+
+        await prisma.supplySnapshot.upsert({
+          where: { id: snapshotId },
+          create: {
+            id: snapshotId,
+            asset,
+            total: supplyData.total,
+            chainsJson: {
+              ethereum: {
+                supply: supplyData.chains.ethereum.supply,
+                success: supplyData.chains.ethereum.success,
+              },
+              worldchain: {
+                supply: supplyData.chains.worldchain.supply,
+                success: supplyData.chains.worldchain.success,
+              },
+              base: {
+                supply: supplyData.chains.base.supply,
+                success: supplyData.chains.base.success,
+              },
+              source: "cron",
+            },
+            snapshotAt,
+          },
+          update: {
+            total: supplyData.total,
+            chainsJson: {
+              ethereum: {
+                supply: supplyData.chains.ethereum.supply,
+                success: supplyData.chains.ethereum.success,
+              },
+              worldchain: {
+                supply: supplyData.chains.worldchain.supply,
+                success: supplyData.chains.worldchain.success,
+              },
+              base: {
+                supply: supplyData.chains.base.supply,
+                success: supplyData.chains.base.success,
+              },
+              source: "cron",
+            },
+            snapshotAt,
+          },
+        });
+
+        console.log(`[cron/supply-snapshot] ${asset} snapshot guardado: ${dateKey}, total=${supplyData.total}`);
+        results[asset] = { total: supplyData.total, success: true };
+      } catch (err) {
+        console.error(`[cron/supply-snapshot] Error con ${asset}:`, err);
+        results[asset] = { total: 0, success: false, error: String(err) };
+      }
+    }
 
     return NextResponse.json({
-      success: true,
+      success: Object.values(results).some((r) => r.success),
       date: dateKey,
-      total: supplyData.total,
-      chains: {
-        ethereum: supplyData.chains.ethereum.supply,
-        worldchain: supplyData.chains.worldchain.supply,
-        base: supplyData.chains.base.supply,
-      },
+      assets: results,
     });
   } catch (error) {
     console.error("[cron/supply-snapshot]", error);
