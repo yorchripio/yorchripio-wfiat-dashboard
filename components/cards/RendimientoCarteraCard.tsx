@@ -248,7 +248,7 @@ export function RendimientoCarteraCard({
         </div>
       </div>
 
-      {/* Rendimiento acumulado y valor en ARS */}
+      {/* Rendimiento acumulado, TNA y valor en ARS */}
       <div className="bg-[#FFFFFF] rounded-xl p-4 mb-5 border border-[#010103]/10">
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <div>
@@ -259,6 +259,11 @@ export function RendimientoCarteraCard({
               {metrics.rendimientoAcumulado >= 0 ? "+" : ""}
               {metrics.rendimientoAcumulado.toFixed(4)}%
             </p>
+            {metrics.diasEnPeriodo > 0 && (
+              <p className="text-sm font-medium text-[#d4a017] mt-1">
+                TNA: {((metrics.rendimientoAcumulado / metrics.diasEnPeriodo) * 365).toFixed(2)}%
+              </p>
+            )}
             {metrics.valorGanadoARS !== 0 && (
               <p className={`text-lg font-semibold mt-2 ${metrics.valorGanadoARS > 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {metrics.valorGanadoARS >= 0 ? "+" : ""}$
