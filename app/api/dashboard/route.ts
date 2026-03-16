@@ -445,7 +445,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         wMXN: "No hay posiciones wMXN cargadas. Subí el Estado de Cuenta de Banregio en Colateral.",
         wCOP: "No hay snapshots wCOP cargados. Subí el CSV de Finandina en Colateral.",
         wPEN: "No se pudo obtener el balance de Buda.com. Verificá las API keys.",
-        wCLP: "No se pudo obtener el balance de Buda.com Chile. Verificá las API keys.",
+        wCLP: "No hay snapshots wCLP cargados. Subí el extracto BCI (MOVCTACTE) en Colateral.",
       };
       return NextResponse.json(
         {

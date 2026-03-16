@@ -92,7 +92,7 @@ export default function ColateralPage(): React.ReactElement {
                 {selectedAsset === "wMXN" && "Gestión de colateral wMXN — Fondo REGIO1 en Banregio"}
                 {selectedAsset === "wCOP" && "Gestión de colateral wCOP — Cuenta ahorro en Finandina"}
                 {selectedAsset === "wPEN" && "Gestión de colateral wPEN — Balance en Buda.com"}
-                {selectedAsset === "wCLP" && "Gestión de colateral wCLP — Balance en Buda.com Chile"}
+                {selectedAsset === "wCLP" && "Gestión de colateral wCLP — Cuenta Corriente BCI"}
                 {selectedAsset === "wARS" && "Composición del colateral y rendimientos por instrumento"}
               </p>
             </div>

@@ -46,7 +46,56 @@ export function parseBciExtracto(buffer: ArrayBuffer): BciSummary {
     }
   }
 
-  if (headerIdx < 0) throw new Error("No se encontró la fila de encabezados en el extracto BCI");
+  // Extract period from "Rango de fecha" row (e.g., "01/02/2026 - 28/02/2026 - Contable (*)")
+  let periodoInicio = "";
+  let periodoFin = "";
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const row = rows[i];
+    if (!Array.isArray(row)) continue;
+    const first = String(row[0] ?? "").toLowerCase();
+    if (first.includes("rango de fecha") || first.includes("periodo")) {
+      const val = String(row[1] ?? "");
+      const match = val.match(/(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{2}\/\d{4})/);
+      if (match) {
+        periodoInicio = parseDate(match[1]) ?? "";
+        periodoFin = parseDate(match[2]) ?? "";
+      }
+    }
+  }
+
+  // Extract saldo from "CLP Disponible" area (row after it has numeric value in col 0)
+  let saldoMetadata = 0;
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const row = rows[i];
+    if (!Array.isArray(row)) continue;
+    const first = String(row[0] ?? "").toLowerCase();
+    if (first.includes("clp disponible")) {
+      // The next row has the numeric saldo in column 0
+      const nextRow = rows[i + 1];
+      if (Array.isArray(nextRow) && typeof nextRow[0] === "number") {
+        saldoMetadata = nextRow[0];
+      }
+      // Also check "Saldo contable" in same row col 3: "CLP 28.040.000"
+      if (saldoMetadata === 0) {
+        const saldoStr = String(row[3] ?? "");
+        const m = saldoStr.match(/CLP\s+([\d.]+)/);
+        if (m) saldoMetadata = parseNum(m[1]);
+      }
+      break;
+    }
+  }
+
+  // If no header row found, use metadata saldo (no-movement months)
+  if (headerIdx < 0) {
+    return {
+      periodoInicio: periodoInicio || new Date().toISOString().slice(0, 10),
+      periodoFin: periodoFin || new Date().toISOString().slice(0, 10),
+      saldoFinal: saldoMetadata,
+      totalAbonos: 0,
+      totalCargos: 0,
+      transactions: [],
+    };
+  }
 
   const headers = rows[headerIdx].map((c) => String(c).toLowerCase().trim());
 
@@ -88,45 +137,16 @@ export function parseBciExtracto(buffer: ArrayBuffer): BciSummary {
     saldoFinal = saldo; // last row's saldo
   }
 
-  // If no transactions, try to get saldo from metadata rows (months with no movements)
-  if (transactions.length === 0) {
-    // Look for saldo in metadata rows (e.g., "Saldo Disponible", "Saldo")
-    for (let i = 0; i < Math.min(rows.length, 25); i++) {
-      const row = rows[i];
-      if (!Array.isArray(row)) continue;
-      const first = String(row[0] ?? "").toLowerCase();
-      if (first.includes("saldo") && !first.includes("columna")) {
-        for (let j = 1; j < row.length; j++) {
-          const v = parseNum(row[j]);
-          if (v > 0) {
-            saldoFinal = v;
-            break;
-          }
-        }
-        if (saldoFinal > 0) break;
-      }
-    }
-
-    // Try extracting period from metadata
-    for (let i = 0; i < Math.min(rows.length, 25); i++) {
-      const row = rows[i];
-      if (!Array.isArray(row)) continue;
-      const first = String(row[0] ?? "").toLowerCase();
-      if (first.includes("periodo") || first.includes("desde") || first.includes("fecha")) {
-        const val = String(row[1] ?? "");
-        const d = parseDate(val);
-        if (d) {
-          if (!fechaMin) fechaMin = d;
-          fechaMax = d;
-        }
-      }
-    }
-  }
-
-  // Use last transaction saldo, or the metadata saldo
+  // Use last transaction saldo, or fallback to metadata saldo
   if (transactions.length > 0) {
     saldoFinal = transactions[transactions.length - 1].saldo;
+  } else {
+    saldoFinal = saldoMetadata;
   }
+
+  // Use extracted period dates if transaction dates are empty
+  if (!fechaMin && periodoInicio) fechaMin = periodoInicio;
+  if (!fechaMax && periodoFin) fechaMax = periodoFin;
 
   const totalAbonos = transactions.reduce((s, t) => s + t.abono, 0);
   const totalCargos = transactions.reduce((s, t) => s + t.cargo, 0);
