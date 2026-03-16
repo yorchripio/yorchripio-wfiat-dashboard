@@ -7,9 +7,9 @@ import { FIXED_POOLS } from "@/lib/geckoterminal/constants";
 import type { GeckoPoolResponse } from "@/lib/geckoterminal/types";
 
 const BASE_URL = "https://api.geckoterminal.com/api/v2";
-const DELAY_MS = 2500;
+const DELAY_MS = 6000; // 6s between requests — GeckoTerminal free tier is strict
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 5000;
+const RETRY_DELAY_MS = 10000; // 10s wait on 429
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
