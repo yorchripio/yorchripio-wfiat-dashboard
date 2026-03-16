@@ -47,20 +47,29 @@ export function CollateralChart({ instrumentos, total, tokenId = "wARS", currenc
   const chartColor = getChartColorForToken(tokenId);
 
   // Preparar datos para el gráfico (solo instrumentos activos)
-  const chartData = instrumentos
-    .filter((inst) => inst.activo && inst.valorTotal > 0)
-    .map((inst) => ({
-      name: NOMBRES_CORTOS[inst.tipo] || inst.nombre,
+  const chartData = (() => {
+    const active = instrumentos.filter((inst) => inst.activo && inst.valorTotal > 0);
+    // Count occurrences of each tipo to detect duplicates
+    const tipoCounts = new Map<string, number>();
+    for (const inst of active) {
+      tipoCounts.set(inst.tipo, (tipoCounts.get(inst.tipo) ?? 0) + 1);
+    }
+    return active.map((inst) => ({
+      // Use nombre when multiple instrumentos share the same tipo
+      name: (tipoCounts.get(inst.tipo) ?? 0) > 1
+        ? inst.nombre
+        : (NOMBRES_CORTOS[inst.tipo] || inst.nombre),
       value: inst.valorTotal,
       porcentaje: inst.porcentaje,
       tipo: inst.tipo,
       rendimiento: inst.rendimientoDiario,
     }));
+  })();
 
   // Formatear números según moneda
   const formatCurrency = (value: number) => {
-    const prefixMap: Record<string, string> = { BRL: "R$", ARS: "$", MXN: "$", COP: "$" };
-    const localeMap: Record<string, string> = { BRL: "pt-BR", ARS: "es-AR", MXN: "es-MX", COP: "es-CO" };
+    const prefixMap: Record<string, string> = { BRL: "R$", ARS: "$", MXN: "$", COP: "$", CLP: "$", PEN: "S/" };
+    const localeMap: Record<string, string> = { BRL: "pt-BR", ARS: "es-AR", MXN: "es-MX", COP: "es-CO", CLP: "es-CL", PEN: "es-PE" };
     const prefix = prefixMap[currencyCode] ?? "$";
     const locale = localeMap[currencyCode] ?? "es-AR";
     return `${prefix} ${value.toLocaleString(locale, { maximumFractionDigits: 0 })}`;

@@ -86,6 +86,10 @@ export default function Dashboard(): React.ReactElement {
     refreshInterval: 5 * 60 * 1000,
     revalidateOnFocus: false,
     shouldRetryOnError: false,
+    onError: () => {
+      // Clear stale data from previous asset when new asset fails
+      mutate(undefined, { revalidate: false });
+    },
   });
 
   const currencyMap: Record<string, string> = { wARS: "ARS", wBRL: "BRL", wMXN: "MXN", wCOP: "COP", wPEN: "PEN", wCLP: "CLP" };
