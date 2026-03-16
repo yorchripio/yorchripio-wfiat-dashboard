@@ -113,6 +113,8 @@ export function RendimientoCarteraCard({
     if (filtered.length === 0) {
       return {
         rendimientoAcumulado: 0,
+        rendimientoReal: 0,
+        tna: 0,
         valorGanadoARS: 0,
         diasEnPeriodo: 0,
         avgAllocation: {} as Record<string, number>,
@@ -121,6 +123,7 @@ export function RendimientoCarteraCard({
 
     let compounded = 1;
     let valorGanadoARS = 0;
+    let sumColateral = 0;
 
     for (let i = 0; i < filtered.length; i++) {
       const d = filtered[i];
@@ -129,9 +132,13 @@ export function RendimientoCarteraCard({
 
       const prevTotal = i > 0 ? (filtered[i - 1].totalColateral ?? 0) : (d.totalColateral ?? 0);
       valorGanadoARS += prevTotal * (dailyReturn / 100);
+      sumColateral += prevTotal;
     }
 
     const rendimientoAcumulado = (compounded - 1) * 100;
+    const avgColateral = sumColateral / filtered.length;
+    const rendimientoReal = avgColateral > 0 ? (valorGanadoARS / avgColateral) * 100 : 0;
+    const tna = filtered.length > 0 ? (rendimientoReal / filtered.length) * 365 : 0;
 
     const sumByTipo: Record<string, number> = {};
     for (const d of filtered) {
@@ -148,6 +155,8 @@ export function RendimientoCarteraCard({
 
     return {
       rendimientoAcumulado,
+      rendimientoReal,
+      tna,
       valorGanadoARS,
       diasEnPeriodo: n,
       avgAllocation,
@@ -155,9 +164,9 @@ export function RendimientoCarteraCard({
   }, [filtered]);
 
   const rendColor =
-    metrics.rendimientoAcumulado > 0
+    metrics.rendimientoReal > 0
       ? "text-emerald-600"
-      : metrics.rendimientoAcumulado < 0
+      : metrics.rendimientoReal < 0
         ? "text-red-600"
         : "text-[#010103]";
 
@@ -256,12 +265,12 @@ export function RendimientoCarteraCard({
               Rendimiento del período
             </p>
             <p className={`text-3xl font-bold ${rendColor}`}>
-              {metrics.rendimientoAcumulado >= 0 ? "+" : ""}
-              {metrics.rendimientoAcumulado.toFixed(4)}%
+              {metrics.rendimientoReal >= 0 ? "+" : ""}
+              {metrics.rendimientoReal.toFixed(4)}%
             </p>
             {metrics.diasEnPeriodo > 0 && (
               <p className="text-sm font-medium text-[#d4a017] mt-1">
-                TNA: {((metrics.rendimientoAcumulado / metrics.diasEnPeriodo) * 365).toFixed(2)}%
+                TNA: {metrics.tna.toFixed(2)}%
               </p>
             )}
             {metrics.valorGanadoARS !== 0 && (
