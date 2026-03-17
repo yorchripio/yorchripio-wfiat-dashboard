@@ -113,13 +113,78 @@ export function RendimientoCarteraCard({
 
   const rindenSet = useMemo(() => new Set(tiposQueRinden), [tiposQueRinden]);
 
-  // Filtrar VCP por el mismo rango de fechas
+  // Filtrar VCP por rango de fechas, incluyendo anchor del día anterior al start
+  // y estimación del día actual si CAFCI aún no publicó
   const filteredVCP = useMemo(() => {
     if (portfolioVCP.length === 0 || !startDate || !endDate) return [];
     const startTs = dateInputToTimestamp(startDate);
     const endTs = dateInputToTimestamp(endDate) + 86400000 - 1;
-    return portfolioVCP.filter((d) => d.timestamp >= startTs && d.timestamp <= endTs);
-  }, [portfolioVCP, startDate, endDate]);
+
+    // Buscar el último VCP antes del startDate como anchor
+    let anchor: typeof portfolioVCP[0] | null = null;
+    for (let i = portfolioVCP.length - 1; i >= 0; i--) {
+      if (portfolioVCP[i].timestamp < startTs) {
+        anchor = portfolioVCP[i];
+        break;
+      }
+    }
+
+    // Puntos dentro del rango
+    const inRange = portfolioVCP.filter((d) => d.timestamp >= startTs && d.timestamp <= endTs);
+
+    // Si no hay puntos en rango, usar anchor + estimación
+    const result: typeof portfolioVCP = [];
+    if (anchor) result.push(anchor);
+    result.push(...inRange);
+
+    // Estimar VCP de hoy si el último dato es anterior a endDate
+    // Usa la tasa diaria del último cambio conocido de VCP
+    if (result.length >= 2) {
+      const last = result[result.length - 1];
+      const lastTs = last.timestamp;
+      const todayTs = dateInputToTimestamp(endDate);
+      if (lastTs < todayTs) {
+        // Calcular tasa diaria del último movimiento
+        const prev = result[result.length - 2];
+        const diasEntreUltimos = Math.max(1, Math.round((last.timestamp - prev.timestamp) / 86400000));
+        const tasaDiaria = (last.vcp / prev.vcp) ** (1 / diasEntreUltimos) - 1;
+        const diasAEstimar = Math.round((todayTs - lastTs) / 86400000);
+        if (diasAEstimar > 0 && diasAEstimar <= 5) { // Max 5 días de estimación (fin de semana + feriados)
+          const vcpEstimado = last.vcp * (1 + tasaDiaria) ** diasAEstimar;
+          result.push({
+            ...last,
+            fecha: endDate,
+            dateKey: endDate,
+            timestamp: todayTs,
+            vcp: vcpEstimado,
+            patrimonio: vcpEstimado * last.cuotapartesTotales,
+          });
+        }
+      }
+    } else if (result.length === 1) {
+      // Solo tenemos anchor, estimar hasta endDate con rendimientoData de hoy
+      const last = result[0];
+      const todayTs = dateInputToTimestamp(endDate);
+      if (last.timestamp < todayTs) {
+        // Buscar el rendimiento diario de hoy en rendimientoData
+        const todayRend = filtered.find((d) => d.dateKey === endDate);
+        if (todayRend && todayRend.rendimiento != null) {
+          const diasDiff = Math.round((todayTs - last.timestamp) / 86400000);
+          const vcpEstimado = last.vcp * (1 + todayRend.rendimiento / 100);
+          result.push({
+            ...last,
+            fecha: endDate,
+            dateKey: endDate,
+            timestamp: todayTs,
+            vcp: vcpEstimado,
+            patrimonio: vcpEstimado * last.cuotapartesTotales,
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [portfolioVCP, startDate, endDate, filtered]);
 
   /**
    * Rendimiento del periodo usando sistema de cuotapartes:
@@ -138,24 +203,37 @@ export function RendimientoCarteraCard({
         avgAllocation: {} as Record<string, number>,
         vcpInicial: 0,
         vcpFinal: 0,
+        vcpEstimado: false,
       };
     }
 
     const startTs = startDate ? dateInputToTimestamp(startDate) : filtered[0].timestamp;
     const endTs = endDate ? dateInputToTimestamp(endDate) : filtered[filtered.length - 1].timestamp;
-    const diasCalendario = Math.round((endTs - startTs) / 86400000) + 1;
+    let diasCalendario = Math.round((endTs - startTs) / 86400000) + 1;
 
     let rendimientoReal: number;
     let valorGanadoARS: number;
     let vcpInicial = 0;
     let vcpFinal = 0;
+    let vcpEstimado = false;
 
     if (filteredVCP.length >= 2) {
+      // Detectar si el último punto es estimado (no existe en portfolioVCP original)
+      const lastVCPPoint = filteredVCP[filteredVCP.length - 1];
+      const existsInOriginal = portfolioVCP.some(
+        (p) => p.dateKey === lastVCPPoint.dateKey && Math.abs(p.vcp - lastVCPPoint.vcp) < 0.01
+      );
+      vcpEstimado = !existsInOriginal;
       // === MÉTODO CUOTAPARTES (preferido) ===
       // Rendimiento = cambio de VCP, independiente de flujos de capital
       vcpInicial = filteredVCP[0].vcp;
       vcpFinal = filteredVCP[filteredVCP.length - 1].vcp;
       rendimientoReal = ((vcpFinal / vcpInicial) - 1) * 100;
+      // Ajustar diasCalendario al span real del VCP (incluye anchor pre-start)
+      const vcpSpanDias = Math.round((filteredVCP[filteredVCP.length - 1].timestamp - filteredVCP[0].timestamp) / 86400000);
+      if (vcpSpanDias > diasCalendario) {
+        diasCalendario = vcpSpanDias;
+      }
 
       // ARS ganados: promedio de cuotapartes en el período × cambio de VCP
       let sumaCuotasPonderada = 0;
@@ -210,8 +288,9 @@ export function RendimientoCarteraCard({
       avgAllocation,
       vcpInicial,
       vcpFinal,
+      vcpEstimado,
     };
-  }, [filtered, filteredVCP, startDate, endDate]);
+  }, [filtered, filteredVCP, portfolioVCP, startDate, endDate]);
 
   const rendColor =
     metrics.rendimientoReal > 0
@@ -258,7 +337,7 @@ export function RendimientoCarteraCard({
       </h3>
       <p className="text-sm text-[#010103]/60 mb-4">
         {filteredVCP.length >= 2
-          ? "Rendimiento basado en cuotapartes (independiente de flujos de capital)"
+          ? `Rendimiento basado en cuotapartes${metrics.vcpEstimado ? " — VCP estimado hasta publicación CAFCI (~18hs)" : ""}`
           : "Retorno compuesto (TWR) desde rendimiento diario de la cartera"}
       </p>
 
@@ -342,6 +421,7 @@ export function RendimientoCarteraCard({
             {metrics.vcpFinal > 0 && (
               <p className="text-xs text-[#010103]/40 mt-1">
                 VCP: {metrics.vcpInicial.toFixed(2)} → {metrics.vcpFinal.toFixed(2)}
+                {metrics.vcpEstimado && <span className="text-amber-500 ml-1">(est.)</span>}
               </p>
             )}
           </div>
