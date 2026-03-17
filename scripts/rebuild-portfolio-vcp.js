@@ -1,7 +1,13 @@
 // scripts/rebuild-portfolio-vcp.js
-// Recalcula el VCP diario del portfolio desde los eventos de cuotapartes
-// VCP = patrimonio / cuotapartesTotales
-// patrimonio = cuotapartesTotales_FCI × VCP_CAFCI + saldoVista
+// Recalcula el VCP diario del portfolio usando rendimiento CAFCI
+// VCP solo cambia por rendimiento del fondo, NUNCA por flujos de capital
+//
+// Método:
+//   1. Patrimonio crece cada día por el rendimiento diario del CAFCI VCP
+//   2. Cuando hay evento: patrimonio +/- montoARS, cuotas += cuotapartes (signed)
+//   3. portfolioVCP = patrimonio / cuotapartesTotales
+//   → Capital in/out no afecta VCP porque ambos cambian proporcionalmente
+
 const { PrismaClient } = require("@prisma/client");
 const p = new PrismaClient();
 
@@ -21,61 +27,67 @@ async function main() {
     eventsByDate[dk].push(e);
   }
 
-  // 2. Load all FCI allocations (VCP CAFCI diario)
+  // 2. Load CAFCI VCP diario
   const fciAllocs = await p.collateralAllocation.findMany({
     where: { asset: "wARS", tipo: "FCI" },
     orderBy: { fecha: "asc" },
-    select: { fecha: true, valorCuotaparte: true, cantidadCuotasPartes: true },
+    select: { fecha: true, valorCuotaparte: true },
   });
-  const vcpByDate = {};
+  const cafciVcpByDate = {};
   for (const a of fciAllocs) {
-    vcpByDate[a.fecha.toISOString().slice(0, 10)] = Number(a.valorCuotaparte);
+    cafciVcpByDate[a.fecha.toISOString().slice(0, 10)] = Number(a.valorCuotaparte);
   }
-  console.log(`Loaded ${fciAllocs.length} FCI VCP records`);
+  console.log(`Loaded ${fciAllocs.length} CAFCI VCP records`);
 
-  // 3. Load saldo vista allocations
-  const vistaAllocs = await p.collateralAllocation.findMany({
-    where: { asset: "wARS", tipo: "A_la_Vista" },
-    orderBy: { fecha: "asc" },
-    select: { fecha: true, cantidadCuotasPartes: true, valorCuotaparte: true },
-  });
-  const vistaByDate = {};
-  for (const a of vistaAllocs) {
-    vistaByDate[a.fecha.toISOString().slice(0, 10)] = Number(a.cantidadCuotasPartes) * Number(a.valorCuotaparte);
-  }
-
-  // 4. Get all unique dates (from FCI allocations)
-  const allDates = Object.keys(vcpByDate).sort();
+  // 3. Get all unique dates
+  const allDates = Object.keys(cafciVcpByDate).sort();
   if (allDates.length === 0) {
-    console.log("No FCI data found");
+    console.log("No CAFCI data found");
     return;
   }
 
-  // 5. Clear existing VCP records
+  // 4. Clear existing VCP records
   await p.portfolioVCP.deleteMany({ where: { asset: "wARS" } });
+  console.log("Cleared existing PortfolioVCP records");
 
-  // 6. Calculate VCP for each day
+  // 5. Build VCP history
+  let patrimonio = 0;
   let cuotapartesTotales = 0;
-  let lastVcp = null;
+  let prevCafciVcp = null;
   const records = [];
 
   for (const dateKey of allDates) {
-    // Apply events for this date (before calculating VCP)
+    const cafciVcp = cafciVcpByDate[dateKey];
+
+    // Step A: Apply daily FCI return to existing patrimonio
+    if (prevCafciVcp && prevCafciVcp > 0 && patrimonio > 0) {
+      const dailyReturnFactor = cafciVcp / prevCafciVcp;
+      patrimonio *= dailyReturnFactor;
+    }
+
+    // Step B: Process events for this date
+    // montoARS is always positive, cuotapartes is signed (negative for RESCATE)
     if (eventsByDate[dateKey]) {
       for (const ev of eventsByDate[dateKey]) {
-        cuotapartesTotales += Number(ev.cuotapartes);
+        const monto = Number(ev.montoARS);
+        const cuotas = Number(ev.cuotapartes); // positive for SUSC, negative for RESCATE
+
+        if (ev.tipo === "SUSCRIPCION") {
+          patrimonio += monto;
+        } else if (ev.tipo === "RESCATE") {
+          patrimonio -= monto;
+        }
+        cuotapartesTotales += cuotas; // signed, so RESCATE subtracts
+
+        const vcpBefore = cuotapartesTotales !== 0 ? patrimonio / cuotapartesTotales : 0;
+        console.log(`  ${dateKey} ${ev.tipo.padEnd(12)} ${ev.tipo === "SUSCRIPCION" ? "+" : "-"}$${monto.toLocaleString().padStart(15)} | cuotas: ${cuotas > 0 ? "+" : ""}${cuotas.toFixed(2)} → total: ${cuotapartesTotales.toFixed(2)} | VCP: ${vcpBefore.toFixed(4)}`);
       }
     }
 
+    prevCafciVcp = cafciVcp;
+
     if (cuotapartesTotales <= 0) continue;
 
-    const vcpFCI = vcpByDate[dateKey];
-    const saldoVista = vistaByDate[dateKey] ?? 0;
-
-    // Patrimonio = cuotapartesTotales × VCP_FCI + saldoVista
-    // Pero cuotapartesTotales son cuotapartes del FCI, no del portfolio
-    // El portfolio VCP = patrimonio / cuotapartesTotales
-    const patrimonio = cuotapartesTotales * vcpFCI + saldoVista;
     const portfolioVcp = patrimonio / cuotapartesTotales;
 
     records.push({
@@ -85,25 +97,25 @@ async function main() {
       cuotapartesTotales,
       patrimonio,
     });
-
-    lastVcp = portfolioVcp;
   }
 
-  // 7. Batch insert
+  // 6. Batch insert using createMany
+  const batchSize = 50;
   let inserted = 0;
-  for (const r of records) {
-    await p.portfolioVCP.create({ data: r });
-    inserted++;
+  for (let i = 0; i < records.length; i += batchSize) {
+    const batch = records.slice(i, i + batchSize);
+    await p.portfolioVCP.createMany({ data: batch });
+    inserted += batch.length;
   }
 
   console.log(`\nInserted ${inserted} PortfolioVCP records`);
 
-  // 8. Verify
+  // 7. Verify
   const first = records[0];
   const last = records[records.length - 1];
   const rendTotal = ((last.vcp / first.vcp) - 1) * 100;
   const dias = Math.round((last.fecha - first.fecha) / 86400000);
-  const tna = (rendTotal / dias) * 365;
+  const tna = dias > 0 ? (rendTotal / dias) * 365 : 0;
 
   console.log(`\nVerificación:`);
   console.log(`  Primer día: ${first.fecha.toISOString().slice(0, 10)} | VCP: ${first.vcp.toFixed(4)} | Patrimonio: $${Math.round(first.patrimonio).toLocaleString()}`);
@@ -113,18 +125,30 @@ async function main() {
   console.log(`  Días: ${dias}`);
   console.log(`  TNA: ${tna.toFixed(2)}%`);
 
-  // Verify mint doesn't affect VCP
-  // Find VCP before and after first mint (28/10)
-  const preIdx = records.findIndex(r => r.fecha.toISOString().slice(0, 10) === "2025-10-27");
-  const postIdx = records.findIndex(r => r.fecha.toISOString().slice(0, 10) === "2025-10-28");
-  if (preIdx >= 0 && postIdx >= 0) {
-    const vcpPre = records[preIdx].vcp;
-    const vcpPost = records[postIdx].vcp;
-    const change = ((vcpPost / vcpPre) - 1) * 100;
-    console.log(`\n  Verificación minteo 28/10:`);
-    console.log(`    VCP 27/10: ${vcpPre.toFixed(4)}`);
-    console.log(`    VCP 28/10: ${vcpPost.toFixed(4)} (cambio: ${change.toFixed(4)}%)`);
-    console.log(`    ${Math.abs(change) < 0.5 ? '✅ VCP no se distorsionó con el minteo' : '⚠️ VCP cambió más de lo esperado'}`);
+  // 8. Check VCP around event dates for distortion
+  console.log(`\nVerificación de eventos (VCP no debe distorsionarse):`);
+  for (const dk of Object.keys(eventsByDate).sort()) {
+    const idx = records.findIndex(r => r.fecha.toISOString().slice(0, 10) === dk);
+    if (idx > 0) {
+      const pre = records[idx - 1];
+      const post = records[idx];
+      const daysBetween = Math.max(1, Math.round((post.fecha - pre.fecha) / 86400000));
+      const change = ((post.vcp / pre.vcp) - 1) * 100;
+      const dailyChange = change / daysBetween;
+      // Normal daily MM return is ~0.05-0.08%, anything > 0.15% per day is suspicious
+      const ok = Math.abs(dailyChange) < 0.15;
+      console.log(`  ${dk}: VCP ${pre.vcp.toFixed(2)} → ${post.vcp.toFixed(2)} (${change >= 0 ? "+" : ""}${change.toFixed(4)}% en ${daysBetween}d, ${dailyChange.toFixed(4)}%/d) ${ok ? '✅' : '⚠️'}`);
+    }
+  }
+
+  // 9. Show last 10 records
+  console.log(`\nÚltimos 10 registros:`);
+  const tail = records.slice(-10);
+  let prevV = tail.length > 0 ? records[records.indexOf(tail[0]) - 1]?.vcp : null;
+  for (const r of tail) {
+    const change = prevV ? ((r.vcp / prevV - 1) * 100).toFixed(4) + "%" : "N/A";
+    console.log(`  ${r.fecha.toISOString().slice(0, 10)} | VCP: ${r.vcp.toFixed(4)} | Δ: ${change} | cuotas: ${r.cuotapartesTotales.toFixed(2)} | pat: $${Math.round(r.patrimonio).toLocaleString()}`);
+    prevV = r.vcp;
   }
 
   await p.$disconnect();
