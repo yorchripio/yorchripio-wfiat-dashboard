@@ -212,6 +212,39 @@ model GeckoPoolCache {
   @@map("gecko_pool_cache")
 }
 
+/// Evento de emisión/rescate de cuotapartes del portfolio wARS.
+/// Cada suscripción/rescate de FCI genera un evento que cambia las cuotapartes totales sin afectar el VCP.
+model CuotaparteEvent {
+  id          String   @id @default(uuid())
+  asset       String   @default("wARS")
+  fecha       DateTime @db.Date
+  tipo        String   // "SUSCRIPCION" | "RESCATE"
+  montoARS    Decimal  @db.Decimal(28, 2) @map("monto_ars")
+  vcpFCI      Decimal  @db.Decimal(28, 6) @map("vcp_fci")       // VCP del CAFCI en esa fecha
+  cuotapartes Decimal  @db.Decimal(28, 6)                        // +suscripción, -rescate
+  descripcion String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([asset, fecha])
+  @@map("cuotaparte_events")
+}
+
+/// VCP diario del portfolio. Calculado como patrimonio / cuotapartesTotales.
+/// Permite medir rendimiento independiente de flujos de capital.
+model PortfolioVCP {
+  id                 String   @id @default(uuid())
+  asset              String   @default("wARS")
+  fecha              DateTime @db.Date
+  vcp                Decimal  @db.Decimal(28, 8)   // VCP del portfolio
+  cuotapartesTotales Decimal  @db.Decimal(28, 6) @map("cuotapartes_totales")
+  patrimonio         Decimal  @db.Decimal(28, 2)   // cuotapartesTotales × vcp
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([asset, fecha])
+  @@index([asset, fecha])
+  @@map("portfolio_vcp")
+}
+
 /// Snapshot mensual de la cuenta corriente BCI para wCLP.
 /// Resumen derivado del XLSX extracto bancario (MOVCTACTE).
 model WclpAccountSnapshot {

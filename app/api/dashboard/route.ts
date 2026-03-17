@@ -22,6 +22,7 @@ interface DashboardPayload {
   historicalData: Awaited<ReturnType<typeof getHistoricalDataFromDB>>;
   rendimientoData: Awaited<ReturnType<typeof getRendimientoDataFromDB>>["data"];
   tiposQueRinden: Awaited<ReturnType<typeof getRendimientoDataFromDB>>["tiposQueRinden"];
+  portfolioVCP?: { fecha: string; dateKey: string; timestamp: number; vcp: number; cuotapartesTotales: number; patrimonio: number }[];
   timestamp: string;
   source: "live" | "snapshot";
   isStale: boolean;
@@ -420,10 +421,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     };
 
-    const [supplyData, collateralData, rendimiento] = await Promise.all([
+    const [supplyData, collateralData, rendimiento, portfolioVCPRows] = await Promise.all([
       getTotalSupply(asset),
       getCollateral(),
       asset === "wARS" ? getRendimientoDataFromDB() : Promise.resolve({ data: [], tiposQueRinden: [] }),
+      asset === "wARS"
+        ? prisma.portfolioVCP.findMany({
+            where: { asset: "wARS" },
+            orderBy: { fecha: "asc" },
+            select: { fecha: true, vcp: true, cuotapartesTotales: true, patrimonio: true },
+          })
+        : Promise.resolve([]),
     ]);
 
     if (!supplyData.allSuccessful) {
@@ -460,12 +468,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ? await getHistoricalDataFromDB(365, supplyData.total)
       : [];
 
+    const portfolioVCP = portfolioVCPRows.map((r: { fecha: Date; vcp: unknown; cuotapartesTotales: unknown; patrimonio: unknown }) => ({
+      fecha: r.fecha.toISOString().slice(0, 10),
+      dateKey: r.fecha.toISOString().slice(0, 10),
+      timestamp: r.fecha.getTime(),
+      vcp: Number(r.vcp),
+      cuotapartesTotales: Number(r.cuotapartesTotales),
+      patrimonio: Number(r.patrimonio),
+    }));
+
     const payload: DashboardPayload = {
       supplyData,
       collateralData,
       historicalData,
       rendimientoData: rendimiento.data,
       tiposQueRinden: rendimiento.tiposQueRinden,
+      portfolioVCP,
       timestamp: new Date().toISOString(),
       source: "live",
       isStale: false,

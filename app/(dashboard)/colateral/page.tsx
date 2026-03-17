@@ -34,6 +34,7 @@ export default function ColateralPage(): React.ReactElement {
   const [tiposQueRinden, setTiposQueRinden] = useState<string[]>([]);
   const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
   const [supplyTotal, setSupplyTotal] = useState<number>(0);
+  const [portfolioVCP, setPortfolioVCP] = useState<{ fecha: string; dateKey: string; timestamp: number; vcp: number; cuotapartesTotales: number; patrimonio: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Increment to force rendimiento cards to re-fetch after confirm
@@ -44,16 +45,18 @@ export default function ColateralPage(): React.ReactElement {
     setLoading(true);
     setError(null);
     try {
-      const [collateralRes, rendimientoRes, historyRes, supplyRes] = await Promise.all([
+      const [collateralRes, rendimientoRes, historyRes, supplyRes, vcpRes] = await Promise.all([
         fetch("/api/collateral"),
         fetch("/api/rendimiento"),
         fetch("/api/history"),
         fetch("/api/supply"),
+        fetch("/api/portfolio-vcp?asset=wARS"),
       ]);
       const collateralResult = await collateralRes.json();
       const rendimientoResult = await rendimientoRes.json();
       const historyResult = await historyRes.json();
       const supplyResult = await supplyRes.json();
+      const vcpResult = await vcpRes.json();
       if (collateralResult.success) setCollateralData(collateralResult.data);
       else setError(collateralResult.error ?? "Error al cargar colateral");
       if (rendimientoResult.success) {
@@ -67,6 +70,9 @@ export default function ColateralPage(): React.ReactElement {
       }
       if (supplyResult.success && supplyResult.data?.total != null) {
         setSupplyTotal(supplyResult.data.total);
+      }
+      if (Array.isArray(vcpResult?.data)) {
+        setPortfolioVCP(vcpResult.data);
       }
     } catch (err) {
       setError("Error de conexión");
@@ -144,7 +150,7 @@ export default function ColateralPage(): React.ReactElement {
           </div>
         ) : collateralData ? (
           <div className="space-y-8">
-            <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} />
+            <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} portfolioVCP={portfolioVCP} />
             {historicalData.length > 0 && (
               <RatioHistoryChart
                 historicalData={historicalData}

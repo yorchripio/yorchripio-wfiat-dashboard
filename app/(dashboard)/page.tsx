@@ -17,9 +17,19 @@ import { TokenSelect } from "@/components/ui/TokenSelect";
 import useSWR from "swr";
 import { Skeleton } from "@/components/ui/skeleton";
 
+interface PortfolioVCPPoint {
+  fecha: string;
+  dateKey: string;
+  timestamp: number;
+  vcp: number;
+  cuotapartesTotales: number;
+  patrimonio: number;
+}
+
 interface DashboardPayload {
   supplyData: TotalSupply;
   collateralData: ColateralData;
+  portfolioVCP?: PortfolioVCPPoint[];
   timestamp: string;
   source: "live" | "snapshot";
   isStale: boolean;

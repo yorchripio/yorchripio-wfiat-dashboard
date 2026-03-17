@@ -9,9 +9,19 @@ import { Button } from "@/components/ui/button";
 import { type RendimientoDiario } from "@/lib/types/rendimiento";
 import { COLLATERAL_COLORS } from "@/lib/constants/colors";
 
+interface PortfolioVCPPoint {
+  fecha: string;
+  dateKey: string;
+  timestamp: number;
+  vcp: number;
+  cuotapartesTotales: number;
+  patrimonio: number;
+}
+
 interface RendimientoCarteraCardProps {
   rendimientoData: RendimientoDiario[];
   tiposQueRinden: string[];
+  portfolioVCP?: PortfolioVCPPoint[];
 }
 
 type QuickRange = "Today" | "1W" | "1M" | "3M" | "YTD" | "All";
@@ -31,6 +41,7 @@ function timestampToDateInput(ts: number): string {
 export function RendimientoCarteraCard({
   rendimientoData,
   tiposQueRinden,
+  portfolioVCP = [],
 }: RendimientoCarteraCardProps) {
   // Rango de fechas de los datos
   const dataRange = useMemo(() => {
@@ -102,12 +113,19 @@ export function RendimientoCarteraCard({
 
   const rindenSet = useMemo(() => new Set(tiposQueRinden), [tiposQueRinden]);
 
+  // Filtrar VCP por el mismo rango de fechas
+  const filteredVCP = useMemo(() => {
+    if (portfolioVCP.length === 0 || !startDate || !endDate) return [];
+    const startTs = dateInputToTimestamp(startDate);
+    const endTs = dateInputToTimestamp(endDate) + 86400000 - 1;
+    return portfolioVCP.filter((d) => d.timestamp >= startTs && d.timestamp <= endTs);
+  }, [portfolioVCP, startDate, endDate]);
+
   /**
-   * Rendimiento del periodo usando TWR (Time-Weighted Return):
-   * - % rendimiento = composición de retornos diarios: ∏(1 + r_i/100) - 1
-   * - ARS ganados = Σ(totalColateral_ayer × r_i/100) para cada día del periodo
-   *
-   * Los retornos diarios vienen del Sheet (fila 37), importados a la DB.
+   * Rendimiento del periodo usando sistema de cuotapartes:
+   * - Si hay datos de VCP del portfolio: rendimiento = (VCP_final / VCP_inicial - 1) × 100
+   *   Esto es independiente de flujos de capital (minteos/burns)
+   * - Fallback: TWR compuesto de rendimientos diarios
    */
   const metrics = useMemo(() => {
     if (filtered.length === 0) {
@@ -118,56 +136,65 @@ export function RendimientoCarteraCard({
         valorGanadoARS: 0,
         diasEnPeriodo: 0,
         avgAllocation: {} as Record<string, number>,
+        vcpInicial: 0,
+        vcpFinal: 0,
       };
     }
 
-    let compounded = 1;
-    let valorGanadoARS = 0;
-
-    for (let i = 0; i < filtered.length; i++) {
-      const d = filtered[i];
-      const dailyReturn = d.rendimiento ?? 0;
-      compounded *= (1 + dailyReturn / 100);
-
-      const prevTotal = i > 0 ? (filtered[i - 1].totalColateral ?? 0) : (d.totalColateral ?? 0);
-      valorGanadoARS += prevTotal * (dailyReturn / 100);
-    }
-
-    const rendimientoAcumulado = (compounded - 1) * 100;
-
-    // Retorno real = ARS ganados / capital promedio ponderado por días calendario
-    // Cada registro pesa por los días calendario hasta el siguiente (viernes pesa 3: vie+sáb+dom)
-    let sumaCapitalPonderada = 0;
-    let totalDiasPonderados = 0;
-    for (let i = 0; i < filtered.length; i++) {
-      const capital = filtered[i].totalColateral ?? 0;
-      let diasPeso: number;
-      if (i < filtered.length - 1) {
-        diasPeso = Math.round((filtered[i + 1].timestamp - filtered[i].timestamp) / 86400000);
-      } else {
-        diasPeso = 1; // último día
-      }
-      sumaCapitalPonderada += capital * diasPeso;
-      totalDiasPonderados += diasPeso;
-    }
-    const capitalPromedio = totalDiasPonderados > 0 ? sumaCapitalPonderada / totalDiasPonderados : 0;
-    const rendimientoReal = capitalPromedio > 0 ? (valorGanadoARS / capitalPromedio) * 100 : 0;
-
-    // TNA = anualización lineal usando días calendario del filtro (Desde → Hasta)
     const startTs = startDate ? dateInputToTimestamp(startDate) : filtered[0].timestamp;
     const endTs = endDate ? dateInputToTimestamp(endDate) : filtered[filtered.length - 1].timestamp;
     const diasCalendario = Math.round((endTs - startTs) / 86400000) + 1;
-    const tna = diasCalendario > 0
-      ? (rendimientoReal / diasCalendario) * 365
-      : 0;
 
+    let rendimientoReal: number;
+    let valorGanadoARS: number;
+    let vcpInicial = 0;
+    let vcpFinal = 0;
+
+    if (filteredVCP.length >= 2) {
+      // === MÉTODO CUOTAPARTES (preferido) ===
+      // Rendimiento = cambio de VCP, independiente de flujos de capital
+      vcpInicial = filteredVCP[0].vcp;
+      vcpFinal = filteredVCP[filteredVCP.length - 1].vcp;
+      rendimientoReal = ((vcpFinal / vcpInicial) - 1) * 100;
+
+      // ARS ganados: promedio de cuotapartes en el período × cambio de VCP
+      let sumaCuotasPonderada = 0;
+      let totalPeso = 0;
+      for (let i = 0; i < filteredVCP.length; i++) {
+        let diasPeso: number;
+        if (i < filteredVCP.length - 1) {
+          diasPeso = Math.round((filteredVCP[i + 1].timestamp - filteredVCP[i].timestamp) / 86400000);
+        } else {
+          diasPeso = 1;
+        }
+        sumaCuotasPonderada += filteredVCP[i].cuotapartesTotales * diasPeso;
+        totalPeso += diasPeso;
+      }
+      const cuotasPromedio = totalPeso > 0 ? sumaCuotasPonderada / totalPeso : 0;
+      valorGanadoARS = cuotasPromedio * (vcpFinal - vcpInicial);
+    } else {
+      // === FALLBACK: TWR compuesto ===
+      let compounded = 1;
+      valorGanadoARS = 0;
+      for (let i = 0; i < filtered.length; i++) {
+        const dailyReturn = filtered[i].rendimiento ?? 0;
+        compounded *= (1 + dailyReturn / 100);
+        const prevTotal = i > 0 ? (filtered[i - 1].totalColateral ?? 0) : (filtered[i].totalColateral ?? 0);
+        valorGanadoARS += prevTotal * (dailyReturn / 100);
+      }
+      rendimientoReal = (compounded - 1) * 100;
+    }
+
+    // TNA = anualización lineal
+    const tna = diasCalendario > 0 ? (rendimientoReal / diasCalendario) * 365 : 0;
+
+    // Allocation breakdown (same as before)
     const sumByTipo: Record<string, number> = {};
     for (const d of filtered) {
       for (const [tipo, pct] of Object.entries(d.allocation ?? {})) {
         sumByTipo[tipo] = (sumByTipo[tipo] ?? 0) + pct;
       }
     }
-
     const n = filtered.length;
     const avgAllocation: Record<string, number> = {};
     for (const [tipo, sum] of Object.entries(sumByTipo)) {
@@ -175,14 +202,16 @@ export function RendimientoCarteraCard({
     }
 
     return {
-      rendimientoAcumulado,
+      rendimientoAcumulado: rendimientoReal,
       rendimientoReal,
       tna,
       valorGanadoARS,
       diasEnPeriodo: diasCalendario,
       avgAllocation,
+      vcpInicial,
+      vcpFinal,
     };
-  }, [filtered, startDate, endDate]);
+  }, [filtered, filteredVCP, startDate, endDate]);
 
   const rendColor =
     metrics.rendimientoReal > 0
@@ -228,7 +257,9 @@ export function RendimientoCarteraCard({
         Rendimiento de la cartera
       </h3>
       <p className="text-sm text-[#010103]/60 mb-4">
-        Retorno compuesto (TWR) desde rendimiento diario de la cartera
+        {filteredVCP.length >= 2
+          ? "Rendimiento basado en cuotapartes (independiente de flujos de capital)"
+          : "Retorno compuesto (TWR) desde rendimiento diario de la cartera"}
       </p>
 
       {/* Filtros rápidos */}
@@ -306,6 +337,11 @@ export function RendimientoCarteraCard({
             {filtered.length > 0 && (
               <p className="text-xs text-[#010103]/50">
                 {filtered[0].fecha} → {filtered[filtered.length - 1].fecha}
+              </p>
+            )}
+            {metrics.vcpFinal > 0 && (
+              <p className="text-xs text-[#010103]/40 mt-1">
+                VCP: {metrics.vcpInicial.toFixed(2)} → {metrics.vcpFinal.toFixed(2)}
               </p>
             )}
           </div>
