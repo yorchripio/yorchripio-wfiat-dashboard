@@ -120,57 +120,48 @@ export function RendimientoCarteraCard({
     const startTs = dateInputToTimestamp(startDate);
     const endTs = dateInputToTimestamp(endDate) + 86400000 - 1;
 
-    // Buscar el último VCP antes del startDate como anchor
-    let anchor: typeof portfolioVCP[0] | null = null;
-    for (let i = portfolioVCP.length - 1; i >= 0; i--) {
+    // Buscar los últimos 2 VCP antes del startDate (para anchor + tasa diaria)
+    const anchors: typeof portfolioVCP = [];
+    for (let i = portfolioVCP.length - 1; i >= 0 && anchors.length < 2; i--) {
       if (portfolioVCP[i].timestamp < startTs) {
-        anchor = portfolioVCP[i];
-        break;
+        anchors.unshift(portfolioVCP[i]); // mantener orden cronológico
       }
     }
 
     // Puntos dentro del rango
     const inRange = portfolioVCP.filter((d) => d.timestamp >= startTs && d.timestamp <= endTs);
 
-    // Si no hay puntos en rango, usar anchor + estimación
+    // Construir resultado: anchors + in-range
     const result: typeof portfolioVCP = [];
-    if (anchor) result.push(anchor);
+    // Solo incluir el anchor más reciente como punto base
+    if (anchors.length > 0) result.push(anchors[anchors.length - 1]);
     result.push(...inRange);
 
-    // Estimar VCP de hoy si el último dato es anterior a endDate
-    // Usa la tasa diaria del último cambio conocido de VCP
-    if (result.length >= 2) {
-      const last = result[result.length - 1];
-      const lastTs = last.timestamp;
-      const todayTs = dateInputToTimestamp(endDate);
-      if (lastTs < todayTs) {
-        // Calcular tasa diaria del último movimiento
-        const prev = result[result.length - 2];
-        const diasEntreUltimos = Math.max(1, Math.round((last.timestamp - prev.timestamp) / 86400000));
-        const tasaDiaria = (last.vcp / prev.vcp) ** (1 / diasEntreUltimos) - 1;
-        const diasAEstimar = Math.round((todayTs - lastTs) / 86400000);
-        if (diasAEstimar > 0 && diasAEstimar <= 5) { // Max 5 días de estimación (fin de semana + feriados)
-          const vcpEstimado = last.vcp * (1 + tasaDiaria) ** diasAEstimar;
-          result.push({
-            ...last,
-            fecha: endDate,
-            dateKey: endDate,
-            timestamp: todayTs,
-            vcp: vcpEstimado,
-            patrimonio: vcpEstimado * last.cuotapartesTotales,
-          });
-        }
+    // Calcular tasa diaria promedio de los últimos VCP conocidos
+    // Usar los últimos 5 puntos del portfolioVCP para una tasa estable
+    const calcTasaDiaria = (): number => {
+      if (portfolioVCP.length < 2) return 0;
+      let sumRate = 0;
+      let count = 0;
+      const startIdx = Math.max(0, portfolioVCP.length - 6);
+      for (let i = startIdx + 1; i < portfolioVCP.length; i++) {
+        const dias = Math.max(1, Math.round((portfolioVCP[i].timestamp - portfolioVCP[i-1].timestamp) / 86400000));
+        const rate = (portfolioVCP[i].vcp / portfolioVCP[i-1].vcp) ** (1 / dias) - 1;
+        sumRate += rate;
+        count++;
       }
-    } else if (result.length === 1) {
-      // Solo tenemos anchor, estimar hasta endDate con rendimientoData de hoy
-      const last = result[0];
+      return count > 0 ? sumRate / count : 0;
+    };
+
+    // Estimar VCP si el último dato disponible es anterior a endDate
+    if (result.length >= 1) {
+      const last = result[result.length - 1];
       const todayTs = dateInputToTimestamp(endDate);
       if (last.timestamp < todayTs) {
-        // Buscar el rendimiento diario de hoy en rendimientoData
-        const todayRend = filtered.find((d) => d.dateKey === endDate);
-        if (todayRend && todayRend.rendimiento != null) {
-          const diasDiff = Math.round((todayTs - last.timestamp) / 86400000);
-          const vcpEstimado = last.vcp * (1 + todayRend.rendimiento / 100);
+        const tasaDiaria = calcTasaDiaria();
+        const diasAEstimar = Math.round((todayTs - last.timestamp) / 86400000);
+        if (tasaDiaria > 0 && diasAEstimar > 0 && diasAEstimar <= 5) {
+          const vcpEstimado = last.vcp * (1 + tasaDiaria) ** diasAEstimar;
           result.push({
             ...last,
             fecha: endDate,
