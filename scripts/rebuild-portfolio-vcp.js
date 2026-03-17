@@ -99,6 +99,34 @@ async function main() {
     });
   }
 
+  // 5b. Drop last record if it looks stale (CAFCI not yet published today)
+  // Compare last day's daily return vs rolling average of prior 5 days
+  if (records.length >= 6) {
+    const last = records[records.length - 1];
+    const prev = records[records.length - 2];
+    const lastDailyReturn = (last.vcp / prev.vcp - 1);
+
+    // Calculate average daily return of prior 5 records
+    let sumReturns = 0;
+    let countReturns = 0;
+    for (let i = records.length - 6; i < records.length - 1; i++) {
+      if (i > 0) {
+        const daysBetween = Math.max(1, Math.round((records[i].fecha - records[i-1].fecha) / 86400000));
+        const dailyRet = ((records[i].vcp / records[i-1].vcp) ** (1/daysBetween)) - 1;
+        sumReturns += dailyRet;
+        countReturns++;
+      }
+    }
+    const avgDailyReturn = countReturns > 0 ? sumReturns / countReturns : 0;
+
+    // If last day's return is < 30% of average, it's likely stale CAFCI data
+    if (avgDailyReturn > 0 && lastDailyReturn < avgDailyReturn * 0.3) {
+      const lastDate = last.fecha.toISOString().slice(0, 10);
+      console.log(`\n⚠️  Dropping stale last record ${lastDate}: daily return ${(lastDailyReturn*100).toFixed(4)}% vs avg ${(avgDailyReturn*100).toFixed(4)}% (CAFCI not yet published)`);
+      records.pop();
+    }
+  }
+
   // 6. Batch insert using createMany
   const batchSize = 50;
   let inserted = 0;
