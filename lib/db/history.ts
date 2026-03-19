@@ -36,11 +36,10 @@ export async function getHistoricalDataFromDB(
   const dateKeys = Array.from(collateralByDate.keys()).sort();
   let supplyIdx = 0;
   let latestSupplyOnOrBeforeDate = 0;
+  let lastMatchedSnapshotDate = "";
 
-  // Find the last snapshot date to know when to switch to fallback
-  const lastSnapshotDate = supplySortedByDate.length > 0
-    ? supplySortedByDate[supplySortedByDate.length - 1].dateKey
-    : "";
+  // Build a set of dates that have actual snapshots for gap detection
+  const snapshotDateSet = new Set(supplySortedByDate.map((s) => s.dateKey));
 
   for (const dateKey of dateKeys) {
     const colateralTotal = collateralByDate.get(dateKey) ?? 0;
@@ -51,18 +50,24 @@ export async function getHistoricalDataFromDB(
       supplySortedByDate[supplyIdx].dateKey <= dateKey
     ) {
       latestSupplyOnOrBeforeDate = supplySortedByDate[supplyIdx].total;
+      lastMatchedSnapshotDate = supplySortedByDate[supplyIdx].dateKey;
       supplyIdx += 1;
     }
 
     let supplyTotal = latestSupplyOnOrBeforeDate;
-    // Use current supply fallback for dates after the last snapshot
-    // (stale snapshot supply would inflate the ratio)
-    if (
-      currentSupplyFallback != null &&
-      currentSupplyFallback > 0 &&
-      (supplyTotal <= 0 || (lastSnapshotDate && dateKey > lastSnapshotDate))
-    ) {
-      supplyTotal = currentSupplyFallback;
+
+    // Detect snapshot gap: if we're more than 2 days from the last snapshot
+    // AND we have a fallback, use it (stale snapshot supply inflates the ratio)
+    if (currentSupplyFallback != null && currentSupplyFallback > 0) {
+      if (supplyTotal <= 0) {
+        supplyTotal = currentSupplyFallback;
+      } else if (lastMatchedSnapshotDate && !snapshotDateSet.has(dateKey)) {
+        const gapMs = dateKeyToTimestamp(dateKey) - dateKeyToTimestamp(lastMatchedSnapshotDate);
+        const gapDays = gapMs / 86400000;
+        if (gapDays > 2) {
+          supplyTotal = currentSupplyFallback;
+        }
+      }
     }
     if (supplyTotal <= 0) continue;
 
