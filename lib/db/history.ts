@@ -37,6 +37,11 @@ export async function getHistoricalDataFromDB(
   let supplyIdx = 0;
   let latestSupplyOnOrBeforeDate = 0;
 
+  // Find the last snapshot date to know when to switch to fallback
+  const lastSnapshotDate = supplySortedByDate.length > 0
+    ? supplySortedByDate[supplySortedByDate.length - 1].dateKey
+    : "";
+
   for (const dateKey of dateKeys) {
     const colateralTotal = collateralByDate.get(dateKey) ?? 0;
     if (colateralTotal <= 0) continue;
@@ -50,7 +55,13 @@ export async function getHistoricalDataFromDB(
     }
 
     let supplyTotal = latestSupplyOnOrBeforeDate;
-    if (supplyTotal <= 0 && currentSupplyFallback != null && currentSupplyFallback > 0) {
+    // Use current supply fallback for dates after the last snapshot
+    // (stale snapshot supply would inflate the ratio)
+    if (
+      currentSupplyFallback != null &&
+      currentSupplyFallback > 0 &&
+      (supplyTotal <= 0 || (lastSnapshotDate && dateKey > lastSnapshotDate))
+    ) {
       supplyTotal = currentSupplyFallback;
     }
     if (supplyTotal <= 0) continue;
