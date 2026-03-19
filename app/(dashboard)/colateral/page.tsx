@@ -162,7 +162,7 @@ export default function ColateralPage(): React.ReactElement {
           </div>
         ) : collateralData ? (
           <div className="space-y-8">
-            <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} portfolioVCP={portfolioVCP} />
+            <RendimientoCarteraCard rendimientoData={rendimientoData} tiposQueRinden={tiposQueRinden} portfolioVCP={portfolioVCP} collateralData={collateralData} />
             {historicalData.length > 0 && (
               <RatioHistoryChart
                 historicalData={historicalData}

@@ -18,10 +18,21 @@ interface PortfolioVCPPoint {
   patrimonio: number;
 }
 
+interface CollateralInstrument {
+  nombre: string;
+  tipo: string;
+  entidad: string;
+}
+
+interface CollateralInfo {
+  instrumentos: CollateralInstrument[];
+}
+
 interface RendimientoCarteraCardProps {
   rendimientoData: RendimientoDiario[];
   tiposQueRinden: string[];
   portfolioVCP?: PortfolioVCPPoint[];
+  collateralData?: CollateralInfo | null;
 }
 
 type QuickRange = "Today" | "1W" | "1M" | "3M" | "YTD" | "All";
@@ -42,6 +53,7 @@ export function RendimientoCarteraCard({
   rendimientoData,
   tiposQueRinden,
   portfolioVCP = [],
+  collateralData,
 }: RendimientoCarteraCardProps) {
   // Rango de fechas de los datos
   const dataRange = useMemo(() => {
@@ -290,7 +302,8 @@ export function RendimientoCarteraCard({
         ? "text-red-600"
         : "text-[#010103]";
 
-  const TIPO_LABEL: Record<string, string> = {
+  // Map tipo → full instrument name from collateral data (if available)
+  const TIPO_LABEL_FALLBACK: Record<string, string> = {
     FCI: "FCI",
     Cuenta_Remunerada: "Cuenta Remunerada",
     A_la_Vista: "Saldo a la Vista",
@@ -302,16 +315,29 @@ export function RendimientoCarteraCard({
     A_la_Vista: COLLATERAL_COLORS.A_la_Vista,
   };
 
+  // Build a tipo→nombre map from the actual collateral instrumentos
+  const tipoNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (collateralData?.instrumentos) {
+      for (const inst of collateralData.instrumentos) {
+        if (inst.nombre && !map.has(inst.tipo)) {
+          map.set(inst.tipo, inst.nombre);
+        }
+      }
+    }
+    return map;
+  }, [collateralData]);
+
   const instrumentos = useMemo(() => {
     return Object.entries(metrics.avgAllocation)
       .filter(([, pct]) => pct > 0)
       .map(([tipo, avgAlloc]) => ({
         tipo,
-        nombre: TIPO_LABEL[tipo] ?? tipo.replace(/_/g, " "),
+        nombre: tipoNameMap.get(tipo) ?? TIPO_LABEL_FALLBACK[tipo] ?? tipo.replace(/_/g, " "),
         color: TIPO_COLOR[tipo] ?? "#6B7280",
         avgAlloc,
       }));
-  }, [metrics.avgAllocation]);
+  }, [metrics.avgAllocation, tipoNameMap]);
 
   if (rendimientoData.length === 0) {
     return (
