@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
       "pdfjs-dist/build/pdf.worker.mjs": "",
     },
   },
-  serverExternalPackages: ["pdfjs-dist"],
+  serverExternalPackages: ["pdfjs-dist", "pdfkit"],
 };
 
 export default nextConfig;

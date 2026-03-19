@@ -8,7 +8,7 @@ import { RatioHistoryChart } from "@/components/cards/RatioHistoryChart";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { type RendimientoDiario } from "@/lib/types/rendimiento";
 import { type HistoricalDataPoint } from "@/lib/sheets/history";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, FileDown } from "lucide-react";
 import { TokenSelect } from "@/components/ui/TokenSelect";
 import { WbrlDataSection } from "@/components/wbrl/WbrlDataSection";
 import { WbrlRendimientoCard } from "@/components/wbrl/WbrlRendimientoCard";
@@ -102,12 +102,24 @@ export default function ColateralPage(): React.ReactElement {
                 {selectedAsset === "wARS" && "Composición del colateral y rendimientos por instrumento"}
               </p>
             </div>
-            <TokenSelect
-              value={selectedAsset}
-              options={assetOptions}
-              onChange={setSelectedAsset}
-              className="w-[160px]"
-            />
+            <div className="flex items-center gap-2">
+              <a
+                href={`/api/report/${selectedAsset}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#5f6e78] border border-[#010103]/20 rounded-lg hover:bg-[#f5f5f5] transition-colors"
+                title="Descargar reporte PDF"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                Reporte
+              </a>
+              <TokenSelect
+                value={selectedAsset}
+                options={assetOptions}
+                onChange={setSelectedAsset}
+                className="w-[160px]"
+              />
+            </div>
           </div>
         </div>
       </header>
