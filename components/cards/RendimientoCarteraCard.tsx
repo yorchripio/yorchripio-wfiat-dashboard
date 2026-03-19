@@ -315,13 +315,13 @@ export function RendimientoCarteraCard({
     A_la_Vista: COLLATERAL_COLORS.A_la_Vista,
   };
 
-  // Build a tipo→nombre map from the actual collateral instrumentos
-  const tipoNameMap = useMemo(() => {
-    const map = new Map<string, string>();
+  // Build tipo→{nombre, entidad} map from the actual collateral instrumentos
+  const tipoInfoMap = useMemo(() => {
+    const map = new Map<string, { nombre: string; entidad: string }>();
     if (collateralData?.instrumentos) {
       for (const inst of collateralData.instrumentos) {
         if (inst.nombre && !map.has(inst.tipo)) {
-          map.set(inst.tipo, inst.nombre);
+          map.set(inst.tipo, { nombre: inst.nombre, entidad: inst.entidad || "" });
         }
       }
     }
@@ -331,13 +331,17 @@ export function RendimientoCarteraCard({
   const instrumentos = useMemo(() => {
     return Object.entries(metrics.avgAllocation)
       .filter(([, pct]) => pct > 0)
-      .map(([tipo, avgAlloc]) => ({
-        tipo,
-        nombre: tipoNameMap.get(tipo) ?? TIPO_LABEL_FALLBACK[tipo] ?? tipo.replace(/_/g, " "),
-        color: TIPO_COLOR[tipo] ?? "#6B7280",
-        avgAlloc,
-      }));
-  }, [metrics.avgAllocation, tipoNameMap]);
+      .map(([tipo, avgAlloc]) => {
+        const info = tipoInfoMap.get(tipo);
+        return {
+          tipo,
+          nombre: info?.nombre ?? TIPO_LABEL_FALLBACK[tipo] ?? tipo.replace(/_/g, " "),
+          entidad: info?.entidad ?? "",
+          color: TIPO_COLOR[tipo] ?? "#6B7280",
+          avgAlloc,
+        };
+      });
+  }, [metrics.avgAllocation, tipoInfoMap]);
 
   if (rendimientoData.length === 0) {
     return (
@@ -449,9 +453,10 @@ export function RendimientoCarteraCard({
       {/* Tabla de instrumentos */}
       <div className="space-y-0">
         <div className="grid grid-cols-12 gap-2 text-xs text-[#010103]/50 uppercase tracking-wide pb-2 border-b border-[#010103]/10">
-          <div className="col-span-6">Instrumento</div>
+          <div className="col-span-4">Instrumento</div>
+          <div className="col-span-3">Banco / ALyC</div>
           <div className="col-span-3 text-right">Allocation</div>
-          <div className="col-span-3 text-right">Rinde</div>
+          <div className="col-span-2 text-right">Rinde</div>
         </div>
 
         {instrumentos.map((inst) => (
@@ -459,19 +464,22 @@ export function RendimientoCarteraCard({
             key={inst.tipo}
             className="grid grid-cols-12 gap-2 items-center py-2.5 border-b border-[#010103]/5"
           >
-            <div className="col-span-6 flex items-center gap-2">
+            <div className="col-span-4 flex items-center gap-2">
               <div
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: inst.color }}
               />
               <span className="text-sm text-[#010103] truncate">{inst.nombre}</span>
             </div>
+            <div className="col-span-3">
+              <span className="text-sm text-[#010103]/70 truncate">{inst.entidad || "—"}</span>
+            </div>
             <div className="col-span-3 text-right">
               <span className="text-sm font-medium text-[#010103]">
                 {inst.avgAlloc.toFixed(1)}%
               </span>
             </div>
-            <div className="col-span-3 text-right">
+            <div className="col-span-2 text-right">
               {rindenSet.has(inst.tipo) ? (
                 <span className="text-xs text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5">Sí</span>
               ) : (
