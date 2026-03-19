@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/collateral-by-asset";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { prisma } from "@/lib/db";
+import { getHistoricalDataFromDB } from "@/lib/db/history";
 import { FIXED_POOLS } from "@/lib/geckoterminal/constants";
 
 export interface PoolSummary {
@@ -119,29 +120,23 @@ export async function getReportData(
     // Table might not exist or be empty
   }
 
-  // 4. Ratio history (collateral/supply)
-  const ratioHistory: { date: string; ratio: number }[] = [];
+  // 4. Ratio history — use the same robust logic as the dashboard
+  //    (interpolates supply to nearest known date, falls back to current supply)
+  let ratioHistory: { date: string; ratio: number }[] = [];
   try {
-    const collateralSnapshots = await prisma.collateralSnapshot.findMany({
-      where: {
-        asset,
-        snapshotAt: { gte: from, lte: to },
-      },
-      orderBy: { snapshotAt: "asc" },
-      select: { snapshotAt: true, total: true },
-    });
-    // Build supply map for matching
-    const supplyMap = new Map(supplyHistory.map((s) => [s.date, s.total]));
-    for (const cs of collateralSnapshots) {
-      const dateKey = cs.snapshotAt.toISOString().slice(0, 10);
-      const supplyForDate = supplyMap.get(dateKey);
-      if (supplyForDate && supplyForDate > 0) {
-        ratioHistory.push({
-          date: dateKey,
-          ratio: (Number(cs.total) / supplyForDate) * 100,
-        });
-      }
-    }
+    const daysInRange = Math.ceil((to.getTime() - from.getTime()) / 86400000);
+    const historicalPoints = await getHistoricalDataFromDB(
+      Math.max(daysInRange + 30, 365),
+      supplyTotal > 0 ? supplyTotal : undefined
+    );
+    const fromTs = from.getTime();
+    const toTs = to.getTime();
+    ratioHistory = historicalPoints
+      .filter((p) => p.timestamp >= fromTs && p.timestamp <= toTs)
+      .map((p) => ({
+        date: p.fecha.split("/").reverse().join("-"), // DD/MM/YYYY → YYYY-MM-DD
+        ratio: p.ratio,
+      }));
   } catch {
     // Table might not exist
   }

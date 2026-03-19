@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CollateralChart } from "@/components/cards/CollateralChart";
 import { RendimientoCarteraCard } from "@/components/cards/RendimientoCarteraCard";
 import { RendimientosChart } from "@/components/cards/RendimientosChart";
@@ -8,7 +8,7 @@ import { RatioHistoryChart } from "@/components/cards/RatioHistoryChart";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { type RendimientoDiario } from "@/lib/types/rendimiento";
 import { type HistoricalDataPoint } from "@/lib/sheets/history";
-import { RefreshCw, FileDown } from "lucide-react";
+import { RefreshCw, FileDown, ChevronDown } from "lucide-react";
 import { TokenSelect } from "@/components/ui/TokenSelect";
 import { WbrlDataSection } from "@/components/wbrl/WbrlDataSection";
 import { WbrlRendimientoCard } from "@/components/wbrl/WbrlRendimientoCard";
@@ -18,6 +18,70 @@ import { WcopDataSection } from "@/components/wcop/WcopDataSection";
 import { WcopRendimientoCard } from "@/components/wcop/WcopRendimientoCard";
 import { WpenDataSection } from "@/components/wpen/WpenDataSection";
 import { WclpDataSection } from "@/components/wclp/WclpDataSection";
+
+function ReportDownload({ asset }: { asset: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const periods = [
+    { label: "Últimos 7 días", days: 7 },
+    { label: "Últimos 30 días", days: 30 },
+    { label: "Últimos 90 días", days: 90 },
+    { label: "YTD", days: -1 },
+    { label: "Último año", days: 365 },
+  ];
+
+  const buildUrl = (days: number) => {
+    const to = new Date();
+    const toStr = to.toISOString().slice(0, 10);
+    let fromStr: string;
+    if (days === -1) {
+      fromStr = `${to.getFullYear()}-01-01`;
+    } else {
+      const from = new Date(to);
+      from.setDate(from.getDate() - days);
+      fromStr = from.toISOString().slice(0, 10);
+    }
+    return `/api/report/${asset}?from=${fromStr}&to=${toStr}`;
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#5f6e78] border border-[#010103]/20 rounded-lg hover:bg-[#f5f5f5] transition-colors"
+      >
+        <FileDown className="w-3.5 h-3.5" />
+        Reporte
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-[#010103]/10 py-1 z-50">
+          {periods.map((p) => (
+            <a
+              key={p.days}
+              href={buildUrl(p.days)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block px-4 py-2 text-sm text-[#010103]/80 hover:bg-[#f5f5f5] transition-colors"
+              onClick={() => setOpen(false)}
+            >
+              {p.label}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ColateralPage(): React.ReactElement {
   const [selectedAsset, setSelectedAsset] = useState("wARS");
@@ -103,16 +167,7 @@ export default function ColateralPage(): React.ReactElement {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <a
-                href={`/api/report/${selectedAsset}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#5f6e78] border border-[#010103]/20 rounded-lg hover:bg-[#f5f5f5] transition-colors"
-                title="Descargar reporte PDF"
-              >
-                <FileDown className="w-3.5 h-3.5" />
-                Reporte
-              </a>
+              <ReportDownload asset={selectedAsset} />
               <TokenSelect
                 value={selectedAsset}
                 options={assetOptions}
