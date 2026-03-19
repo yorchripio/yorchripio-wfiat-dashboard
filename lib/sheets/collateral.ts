@@ -209,9 +209,9 @@ const SHEET_ROW_TO_INSTRUMENT: Array<{
   nombre: string;
   entidad: string;
 }> = [
-  { rowIndex: 3, tipo: "FCI", nombre: "Adcap Ahorro Pesos - Clase B", entidad: "Inversiones Banco Comercio" },
-  { rowIndex: 4, tipo: "Cuenta_Remunerada", nombre: "Cta Remunerada Comercio", entidad: "Banco Comercio" },
-  { rowIndex: 5, tipo: "A_la_Vista", nombre: "Saldo Vista", entidad: "Banco Comercio" },
+  { rowIndex: 3, tipo: "FCI", nombre: "FCI ADCAP Ahorro MM Clase B", entidad: "Banco Comercio" },
+  { rowIndex: 4, tipo: "Cuenta_Remunerada", nombre: "Cuenta Remunerada", entidad: "Banco Comercio" },
+  { rowIndex: 5, tipo: "A_la_Vista", nombre: "Saldo a la Vista", entidad: "Banco Comercio" },
 ];
 
 /**

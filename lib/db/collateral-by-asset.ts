@@ -31,8 +31,8 @@ export async function getWmxnCollateralData(): Promise<ColateralData | null> {
   const isEstimated = daysSince > 0 && dailyRate > 0;
   const rendDiario = dailyRate * 100;
   const label = isEstimated
-    ? `Fondo REGIO1 Serie ${latest.serie} (est. +${daysSince}d)`
-    : `Fondo REGIO1 Serie ${latest.serie}`;
+    ? `Fondo de Inversión REGIO1 Serie ${latest.serie} (est. +${daysSince}d)`
+    : `Fondo de Inversión REGIO1 Serie ${latest.serie}`;
 
   return {
     fecha: today,
@@ -41,7 +41,7 @@ export async function getWmxnCollateralData(): Promise<ColateralData | null> {
         id: "fondo-regio1",
         nombre: label,
         tipo: "FCI" as const,
-        entidad: "Banregio",
+        entidad: "Banregio (GBM)",
         valorTotal: valorEstimado,
         porcentaje: 100,
         rendimientoDiario: rendDiario,
@@ -94,9 +94,9 @@ export async function getWcopCollateralData(): Promise<ColateralData | null> {
   const instrumentos = [
     {
       id: "cuenta-ahorro-finandina",
-      nombre: "Cta. Remunerada (World Chain)",
+      nombre: "Cuenta de Ahorro (World Chain)",
       tipo: "Cuenta_Remunerada" as const,
-      entidad: "Finandina",
+      entidad: "Banco Finandina",
       valorTotal: colateralWC,
       porcentaje: colateralTotal > 0 ? (colateralWC / colateralTotal) * 100 : 100,
       rendimientoDiario: rendDiario,
@@ -107,9 +107,9 @@ export async function getWcopCollateralData(): Promise<ColateralData | null> {
   if (ethBaseCapital > 0) {
     instrumentos.push({
       id: "finandina-eth-base",
-      nombre: `Cta. Remunerada (ETH+Base)`,
+      nombre: "Cuenta de Ahorro (ETH+Base)",
       tipo: "Cuenta_Remunerada" as const,
-      entidad: "Finandina",
+      entidad: "Banco Finandina",
       valorTotal: ethBaseCapital + ethBaseInterest,
       porcentaje: colateralTotal > 0 ? ((ethBaseCapital + ethBaseInterest) / colateralTotal) * 100 : 0,
       rendimientoDiario: rendDiario,
@@ -139,9 +139,9 @@ export async function getWpenCollateralData(): Promise<ColateralData | null> {
       instrumentos: [
         {
           id: "buda-pen",
-          nombre: "Balance Buda.com (a la vista)",
+          nombre: "Saldo a la Vista",
           tipo: "A_la_Vista" as const,
-          entidad: "Buda.com",
+          entidad: "Buda.com (Exchange)",
           valorTotal: balance.amount,
           porcentaje: 100,
           rendimientoDiario: 0,
@@ -175,9 +175,9 @@ export async function getWclpCollateralData(): Promise<ColateralData | null> {
       instrumentos: [
         {
           id: "bci-cta-cte",
-          nombre: "Cuenta Corriente BCI",
+          nombre: "Cuenta Corriente",
           tipo: "A_la_Vista" as const,
-          entidad: "BCI",
+          entidad: "Banco BCI",
           valorTotal: total,
           porcentaje: 100,
           rendimientoDiario: 0,
@@ -220,9 +220,9 @@ export async function getWbrlCollateralData(): Promise<ColateralData | null> {
     instrumentos: [
       {
         id: "cdb-cdi-99",
-        nombre: `CDB 99% CDI CETIP (${positions.length} pos.)`,
+        nombre: `CDB 99% CDI (${positions.length} posiciones)`,
         tipo: "CDB" as const,
-        entidad: positions[0]?.emisor ?? "BANCO GENIAL S.A.",
+        entidad: positions[0]?.emisor ?? "Banco Genial",
         valorTotal: totalBruto,
         porcentaje: 100,
         rendimientoDiario: rendDiario,

@@ -25,12 +25,12 @@ interface CollateralChartProps {
   currencyCode?: string;
 }
 
-// Nombres más amigables para mostrar
-const NOMBRES_CORTOS: Record<string, string> = {
-  FCI: "FCI Adcap",
-  Cuenta_Remunerada: "Cta. Remunerada",
-  A_la_Vista: "Saldo Vista",
-  CDB: "CDB 99% CDI",
+// Fallback short names (only used when nombre is missing)
+const NOMBRES_FALLBACK: Record<string, string> = {
+  FCI: "FCI",
+  Cuenta_Remunerada: "Cuenta Remunerada",
+  A_la_Vista: "Saldo a la Vista",
+  CDB: "CDB",
 };
 
 /** Opacidades para distinguir segmentos del pie manteniendo el color del token */
@@ -55,10 +55,8 @@ export function CollateralChart({ instrumentos, total, tokenId = "wARS", currenc
       tipoCounts.set(inst.tipo, (tipoCounts.get(inst.tipo) ?? 0) + 1);
     }
     return active.map((inst) => ({
-      // Use nombre when multiple instrumentos share the same tipo
-      name: (tipoCounts.get(inst.tipo) ?? 0) > 1
-        ? inst.nombre
-        : (NOMBRES_CORTOS[inst.tipo] || inst.nombre),
+      name: inst.nombre || NOMBRES_FALLBACK[inst.tipo] || inst.tipo,
+      entidad: inst.entidad || "",
       value: inst.valorTotal,
       porcentaje: inst.porcentaje,
       tipo: inst.tipo,
@@ -82,6 +80,9 @@ export function CollateralChart({ instrumentos, total, tokenId = "wARS", currenc
       return (
         <div className="bg-[#FFFFFF] p-3 rounded-lg shadow-lg border border-[#010103]/10">
           <p className="font-semibold text-[#010103]">{data.name}</p>
+          {data.entidad && (
+            <p className="text-xs text-gray-400">{data.entidad}</p>
+          )}
           <p className="text-sm text-gray-600">
             Valor: {formatCurrency(data.value)}
           </p>
@@ -168,7 +169,7 @@ export function CollateralChart({ instrumentos, total, tokenId = "wARS", currenc
           >
             <div className="flex items-center gap-3">
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{
                   backgroundColor: hexWithOpacity(
                     chartColor,
@@ -176,9 +177,14 @@ export function CollateralChart({ instrumentos, total, tokenId = "wARS", currenc
                   ),
                 }}
               />
-              <span className="text-sm font-medium text-[#010103]">
-                {inst.name}
-              </span>
+              <div>
+                <span className="text-sm font-medium text-[#010103]">
+                  {inst.name}
+                </span>
+                {inst.entidad && (
+                  <p className="text-xs text-gray-400">{inst.entidad}</p>
+                )}
+              </div>
             </div>
             <div className="text-right">
               <p className="text-sm font-semibold text-[#010103]">

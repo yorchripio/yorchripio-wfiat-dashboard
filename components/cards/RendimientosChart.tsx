@@ -23,11 +23,11 @@ interface RendimientosChartProps {
   tokenId?: string;
 }
 
-// Nombres más amigables para mostrar
-const NOMBRES_CORTOS: Record<string, string> = {
-  FCI: "FCI Adcap",
-  Cuenta_Remunerada: "Cta. Remunerada",
-  A_la_Vista: "Saldo Vista",
+// Fallback short names (only used when nombre is missing)
+const NOMBRES_FALLBACK: Record<string, string> = {
+  FCI: "FCI",
+  Cuenta_Remunerada: "Cuenta Remunerada",
+  A_la_Vista: "Saldo a la Vista",
 };
 
 const BAR_OPACITIES = [1, 0.85, 0.7];
@@ -49,7 +49,7 @@ export function RendimientosChart({
   const chartData = instrumentos
     .filter((inst) => inst.activo && inst.valorTotal > 0)
     .map((inst) => ({
-      name: NOMBRES_CORTOS[inst.tipo] || inst.nombre,
+      name: inst.nombre || NOMBRES_FALLBACK[inst.tipo] || inst.tipo,
       rendimiento: inst.rendimientoDiario,
       tipo: inst.tipo,
       valorTotal: inst.valorTotal,

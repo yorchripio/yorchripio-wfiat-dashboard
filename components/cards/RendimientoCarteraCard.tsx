@@ -292,8 +292,9 @@ export function RendimientoCarteraCard({
 
   const TIPO_LABEL: Record<string, string> = {
     FCI: "FCI",
-    Cuenta_Remunerada: "Cta. Remunerada",
-    A_la_Vista: "Saldo Vista",
+    Cuenta_Remunerada: "Cuenta Remunerada",
+    A_la_Vista: "Saldo a la Vista",
+    CDB: "CDB",
   };
   const TIPO_COLOR: Record<string, string> = {
     FCI: "#5f6e78",
