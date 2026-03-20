@@ -25,20 +25,39 @@ async function getLatestAllocationDate(asset: string): Promise<Date | null> {
 }
 
 /**
- * Construye ColateralData desde la DB (allocations) para la fecha dada o la más reciente.
- * Misma forma que getCollateralData() de Sheets para que el dashboard no cambie.
+ * Construye ColateralData desde la DB (allocations).
+ * Para cada tipo de instrumento, toma la allocation más reciente (activa).
+ * Esto permite que distintos tipos tengan fechas distintas sin perder datos.
  */
 export async function getCollateralDataFromDB(
   asset: string = DEFAULT_ASSET,
   fechaPedida?: Date
 ): Promise<ColateralData | null> {
-  const fecha = fechaPedida ?? (await getLatestAllocationDate(asset));
-  if (!fecha) return null;
+  let allocations;
 
-  const allocations = await prisma.collateralAllocation.findMany({
-    where: { asset, fecha, activo: true },
-    orderBy: { tipo: "asc" },
-  });
+  if (fechaPedida) {
+    // Fecha específica: solo allocations de ese día
+    allocations = await prisma.collateralAllocation.findMany({
+      where: { asset, fecha: fechaPedida, activo: true },
+      orderBy: { tipo: "asc" },
+    });
+  } else {
+    // Sin fecha: para cada tipo, tomar la allocation más reciente
+    // Primero obtenemos todos los tipos activos
+    const allActive = await prisma.collateralAllocation.findMany({
+      where: { asset, activo: true },
+      orderBy: { fecha: "desc" },
+    });
+
+    // Quedarnos con la más reciente por tipo
+    const latestByTipo = new Map<string, typeof allActive[0]>();
+    for (const row of allActive) {
+      if (!latestByTipo.has(row.tipo)) {
+        latestByTipo.set(row.tipo, row);
+      }
+    }
+    allocations = Array.from(latestByTipo.values());
+  }
 
   if (allocations.length === 0) return null;
 
@@ -49,17 +68,24 @@ export async function getCollateralDataFromDB(
 
   if (total === 0) return null;
 
-  const prevDay = new Date(fecha);
-  prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-  const prevAllocations = await prisma.collateralAllocation.findMany({
-    where: { asset, fecha: prevDay, activo: true },
-    select: { tipo: true, cantidadCuotasPartes: true, valorCuotaparte: true },
-  });
+  // Para rendimiento diario, buscar el valor del día anterior de cada allocation
   const valorAyerByTipo = new Map<string, number>();
-  for (const r of prevAllocations) {
-    const v = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
-    valorAyerByTipo.set(r.tipo, (valorAyerByTipo.get(r.tipo) ?? 0) + v);
+  for (const r of allocations) {
+    const prevDay = new Date(r.fecha);
+    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+    const prevRows = await prisma.collateralAllocation.findMany({
+      where: { asset, tipo: r.tipo, fecha: prevDay, activo: true },
+      select: { cantidadCuotasPartes: true, valorCuotaparte: true },
+    });
+    for (const pr of prevRows) {
+      const v = Number(pr.cantidadCuotasPartes) * Number(pr.valorCuotaparte);
+      valorAyerByTipo.set(r.tipo, (valorAyerByTipo.get(r.tipo) ?? 0) + v);
+    }
   }
+
+  // Fecha más reciente entre todos los instrumentos
+  const latestFecha = allocations.reduce((max, r) =>
+    r.fecha > max ? r.fecha : max, allocations[0].fecha);
 
   const instrumentos: InstrumentoColateral[] = allocations.map((r) => {
     const valorTotal = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
@@ -82,7 +108,7 @@ export async function getCollateralDataFromDB(
   const rendimientoCartera =
     instrumentos.reduce((acc, i) => acc + i.rendimientoDiario * (i.porcentaje / 100), 0) || 0;
 
-  const fechaStr = fecha.toLocaleDateString("es-AR", {
+  const fechaStr = latestFecha.toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
