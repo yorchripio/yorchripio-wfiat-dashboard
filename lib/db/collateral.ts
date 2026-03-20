@@ -64,25 +64,31 @@ export async function getCollateralDataFromDB(
   // Fecha de las allocations (todas comparten la misma fecha)
   const fecha = allocations[0].fecha;
 
-  // Para rendimiento diario: buscar allocations del día anterior
+  // Para rendimiento diario: comparar valorCuotaparte (VCP) de ayer vs hoy.
+  // Usar VCP en vez de patrimonio total para que aportes de capital nuevos
+  // no inflen el rendimiento (100M nuevos != 12% de rendimiento).
   const prevDay = new Date(fecha);
   prevDay.setUTCDate(prevDay.getUTCDate() - 1);
   const prevAllocations = await prisma.collateralAllocation.findMany({
     where: { asset, fecha: prevDay, activo: true },
-    select: { tipo: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+    select: { tipo: true, valorCuotaparte: true },
   });
-  const valorAyerByTipo = new Map<string, number>();
+  const vcpAyerByTipo = new Map<string, number>();
   for (const r of prevAllocations) {
-    const v = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
-    valorAyerByTipo.set(r.tipo, (valorAyerByTipo.get(r.tipo) ?? 0) + v);
+    const vcp = Number(r.valorCuotaparte);
+    if (vcp > 0 && !vcpAyerByTipo.has(r.tipo)) {
+      vcpAyerByTipo.set(r.tipo, vcp);
+    }
   }
 
   const instrumentos: InstrumentoColateral[] = allocations.map((r) => {
     const valorTotal = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
     const porcentaje = total > 0 ? (valorTotal / total) * 100 : 0;
-    const valorAyer = valorAyerByTipo.get(r.tipo) ?? 0;
+    const vcpHoy = Number(r.valorCuotaparte);
+    const vcpAyer = vcpAyerByTipo.get(r.tipo) ?? 0;
+    // Rendimiento = cambio en valor cuotaparte (no en patrimonio total)
     const rendimientoDiario =
-      valorAyer > 0 ? ((valorTotal - valorAyer) / valorAyer) * 100 : (r.rendimientoDiario != null ? Number(r.rendimientoDiario) : 0);
+      vcpAyer > 0 ? ((vcpHoy - vcpAyer) / vcpAyer) * 100 : (r.rendimientoDiario != null ? Number(r.rendimientoDiario) : 0);
     return {
       id: TIPO_TO_ID[r.tipo] ?? r.id,
       nombre: r.nombre,
