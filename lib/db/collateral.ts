@@ -125,8 +125,11 @@ export async function getCollateralDataFromDB(
 }
 
 /**
- * Total colateral por fecha (suma de allocations activos por día).
- * Usado para el gráfico histórico sin depender de collateral_snapshots.
+ * Total colateral por fecha — para cada día, suma el valor más reciente de cada tipo.
+ *
+ * Ejemplo: si FCI tiene datos hasta el 19/03 y Cuenta_Remunerada se agrega el 20/03,
+ * para el 20/03 se suma el FCI del 19/03 + Cuenta_Remunerada del 20/03.
+ * Esto evita que el total caiga cuando un tipo nuevo se agrega con fecha distinta.
  */
 export async function getCollateralTotalsByDate(
   asset: string = DEFAULT_ASSET,
@@ -140,7 +143,6 @@ export async function getCollateralTotalsByDate(
   if (!latestRow) return new Map<string, number>();
 
   const fromDate = new Date(latestRow.fecha);
-  // Buffer de 30 días para evitar cortes por días sin data.
   fromDate.setUTCDate(fromDate.getUTCDate() - (limit + 30));
 
   const rows = await prisma.collateralAllocation.findMany({
@@ -150,14 +152,46 @@ export async function getCollateralTotalsByDate(
       fecha: { gte: fromDate },
     },
     orderBy: { fecha: "asc" },
-    select: { fecha: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+    select: { fecha: true, tipo: true, cantidadCuotasPartes: true, valorCuotaparte: true },
   });
-  const byDate = new Map<string, number>();
+
+  // 1. Collect all unique dates and tipos
+  const allDates = new Set<string>();
+  // tipo → date → value
+  const tipoByDate = new Map<string, Map<string, number>>();
+
   for (const r of rows) {
-    const key = r.fecha.toISOString().slice(0, 10);
+    const dateKey = r.fecha.toISOString().slice(0, 10);
+    allDates.add(dateKey);
     const v = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
-    byDate.set(key, (byDate.get(key) ?? 0) + v);
+
+    if (!tipoByDate.has(r.tipo)) {
+      tipoByDate.set(r.tipo, new Map());
+    }
+    const dateMap = tipoByDate.get(r.tipo)!;
+    dateMap.set(dateKey, (dateMap.get(dateKey) ?? 0) + v);
   }
+
+  // 2. For each date, sum the latest known value per tipo (carry forward)
+  const sortedDates = Array.from(allDates).sort();
+  const byDate = new Map<string, number>();
+  const latestValueByTipo = new Map<string, number>();
+
+  for (const dateKey of sortedDates) {
+    // Update latest known value for each tipo that has data on this date
+    for (const [tipo, dateMap] of tipoByDate) {
+      if (dateMap.has(dateKey)) {
+        latestValueByTipo.set(tipo, dateMap.get(dateKey)!);
+      }
+    }
+    // Sum all latest values
+    let total = 0;
+    for (const v of latestValueByTipo.values()) {
+      total += v;
+    }
+    byDate.set(dateKey, total);
+  }
+
   const sorted = Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   const limited = sorted.slice(-limit);
   return new Map(limited);
