@@ -64,20 +64,26 @@ export async function getCollateralDataFromDB(
   // Fecha de las allocations (todas comparten la misma fecha)
   const fecha = allocations[0].fecha;
 
-  // Para rendimiento diario: comparar valorCuotaparte (VCP) de ayer vs hoy.
+  // Para rendimiento diario: comparar valorCuotaparte (VCP) del día anterior vs hoy.
   // Usar VCP en vez de patrimonio total para que aportes de capital nuevos
   // no inflen el rendimiento (100M nuevos != 12% de rendimiento).
-  const prevDay = new Date(fecha);
-  prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-  const prevAllocations = await prisma.collateralAllocation.findMany({
-    where: { asset, fecha: prevDay, activo: true },
-    select: { tipo: true, valorCuotaparte: true },
+  // Buscar la fecha MÁS RECIENTE anterior (no asumir "ayer" exacto — puede ser finde/feriado).
+  const prevAllocationRow = await prisma.collateralAllocation.findFirst({
+    where: { asset, fecha: { lt: fecha }, activo: true },
+    orderBy: { fecha: "desc" },
+    select: { fecha: true },
   });
   const vcpAyerByTipo = new Map<string, number>();
-  for (const r of prevAllocations) {
-    const vcp = Number(r.valorCuotaparte);
-    if (vcp > 0 && !vcpAyerByTipo.has(r.tipo)) {
-      vcpAyerByTipo.set(r.tipo, vcp);
+  if (prevAllocationRow) {
+    const prevAllocations = await prisma.collateralAllocation.findMany({
+      where: { asset, fecha: prevAllocationRow.fecha, activo: true },
+      select: { tipo: true, valorCuotaparte: true },
+    });
+    for (const r of prevAllocations) {
+      const vcp = Number(r.valorCuotaparte);
+      if (vcp > 0 && !vcpAyerByTipo.has(r.tipo)) {
+        vcpAyerByTipo.set(r.tipo, vcp);
+      }
     }
   }
 
