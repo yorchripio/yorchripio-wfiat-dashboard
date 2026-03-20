@@ -42,12 +42,13 @@ export async function getCollateralDataFromDB(
       orderBy: { tipo: "asc" },
     });
   } else {
-    // Sin fecha: traer TODAS las allocations activas.
-    // Múltiples filas del mismo tipo (ej: 2 suscripciones FCI) se suman.
-    // Filas que ya no aplican deben marcarse activo=false.
+    // Sin fecha: tomar la fecha más reciente y traer sus allocations.
+    // Cada fecha representa un snapshot completo de todas las posiciones.
+    const fecha = await getLatestAllocationDate(asset);
+    if (!fecha) return null;
     allocations = await prisma.collateralAllocation.findMany({
-      where: { asset, activo: true },
-      orderBy: { fecha: "desc" },
+      where: { asset, fecha, activo: true },
+      orderBy: { tipo: "asc" },
     });
   }
 
@@ -60,24 +61,21 @@ export async function getCollateralDataFromDB(
 
   if (total === 0) return null;
 
-  // Para rendimiento diario, buscar el valor del día anterior de cada allocation
-  const valorAyerByTipo = new Map<string, number>();
-  for (const r of allocations) {
-    const prevDay = new Date(r.fecha);
-    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-    const prevRows = await prisma.collateralAllocation.findMany({
-      where: { asset, tipo: r.tipo, fecha: prevDay, activo: true },
-      select: { cantidadCuotasPartes: true, valorCuotaparte: true },
-    });
-    for (const pr of prevRows) {
-      const v = Number(pr.cantidadCuotasPartes) * Number(pr.valorCuotaparte);
-      valorAyerByTipo.set(r.tipo, (valorAyerByTipo.get(r.tipo) ?? 0) + v);
-    }
-  }
+  // Fecha de las allocations (todas comparten la misma fecha)
+  const fecha = allocations[0].fecha;
 
-  // Fecha más reciente entre todos los instrumentos
-  const latestFecha = allocations.reduce((max, r) =>
-    r.fecha > max ? r.fecha : max, allocations[0].fecha);
+  // Para rendimiento diario: buscar allocations del día anterior
+  const prevDay = new Date(fecha);
+  prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+  const prevAllocations = await prisma.collateralAllocation.findMany({
+    where: { asset, fecha: prevDay, activo: true },
+    select: { tipo: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+  });
+  const valorAyerByTipo = new Map<string, number>();
+  for (const r of prevAllocations) {
+    const v = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
+    valorAyerByTipo.set(r.tipo, (valorAyerByTipo.get(r.tipo) ?? 0) + v);
+  }
 
   const instrumentos: InstrumentoColateral[] = allocations.map((r) => {
     const valorTotal = Number(r.cantidadCuotasPartes) * Number(r.valorCuotaparte);
@@ -100,7 +98,7 @@ export async function getCollateralDataFromDB(
   const rendimientoCartera =
     instrumentos.reduce((acc, i) => acc + i.rendimientoDiario * (i.porcentaje / 100), 0) || 0;
 
-  const fechaStr = latestFecha.toLocaleDateString("es-AR", {
+  const fechaStr = fecha.toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
