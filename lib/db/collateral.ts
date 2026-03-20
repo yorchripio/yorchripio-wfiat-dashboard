@@ -42,21 +42,13 @@ export async function getCollateralDataFromDB(
       orderBy: { tipo: "asc" },
     });
   } else {
-    // Sin fecha: para cada tipo, tomar la allocation más reciente
-    // Primero obtenemos todos los tipos activos
-    const allActive = await prisma.collateralAllocation.findMany({
+    // Sin fecha: traer TODAS las allocations activas.
+    // Múltiples filas del mismo tipo (ej: 2 suscripciones FCI) se suman.
+    // Filas que ya no aplican deben marcarse activo=false.
+    allocations = await prisma.collateralAllocation.findMany({
       where: { asset, activo: true },
       orderBy: { fecha: "desc" },
     });
-
-    // Quedarnos con la más reciente por tipo
-    const latestByTipo = new Map<string, typeof allActive[0]>();
-    for (const row of allActive) {
-      if (!latestByTipo.has(row.tipo)) {
-        latestByTipo.set(row.tipo, row);
-      }
-    }
-    allocations = Array.from(latestByTipo.values());
   }
 
   if (allocations.length === 0) return null;
