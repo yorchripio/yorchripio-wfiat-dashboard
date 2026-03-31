@@ -3,7 +3,7 @@
 
 import { type AssetSymbol, TOKEN_CONFIGS } from "@/lib/blockchain/config";
 import { getTotalSupply } from "@/lib/blockchain/supply";
-import { getCollateralDataFromDB } from "@/lib/db/collateral";
+import { getCollateralDataFromDB, getCollateralTotalsByDate } from "@/lib/db/collateral";
 import {
   getWbrlCollateralData,
   getWmxnCollateralData,
@@ -30,6 +30,36 @@ export interface SupplyByChain {
   supply: number;
 }
 
+export interface CuotaparteEventRow {
+  fecha: string;
+  tipo: string;
+  montoARS: number;
+  vcpFCI: number;
+  cuotapartes: number;
+  descripcion: string;
+  cuotapartesAcum: number;
+}
+
+export interface CoverageRow {
+  date: string;
+  collateral: number;
+  supply: number;
+  ratio: number;
+}
+
+export interface CollateralBreakdownRow {
+  date: string;
+  items: { tipo: string; nombre: string; valor: number }[];
+  total: number;
+}
+
+export interface VCPRow {
+  date: string;
+  vcp: number;
+  patrimonio: number;
+  cuotapartes: number;
+}
+
 export interface ReportData {
   asset: AssetSymbol;
   assetName: string;
@@ -50,6 +80,11 @@ export interface ReportData {
   pools: PoolSummary[];
   currencyCode: string;
   currencySymbol: string;
+  // Audit sections
+  cuotaparteEvents: CuotaparteEventRow[];
+  coverageHistory: CoverageRow[];
+  collateralBreakdown: CollateralBreakdownRow[];
+  vcpHistory: VCPRow[];
 }
 
 const CURRENCY_MAP: Record<string, { code: string; symbol: string }> = {
@@ -201,6 +236,168 @@ export async function getReportData(
     // Pool cache might be empty
   }
 
+  // ═══ AUDIT SECTIONS ═══
+
+  // 7. Cuotaparte Events (suscripciones/rescates)
+  const cuotaparteEvents: CuotaparteEventRow[] = [];
+  if (asset === "wARS") {
+    try {
+      const events = await prisma.cuotaparteEvent.findMany({
+        where: {
+          asset: "wARS",
+          fecha: { gte: from, lte: to },
+        },
+        orderBy: { fecha: "asc" },
+      });
+      let cuotapartesAcum = 0;
+      // Get initial cuotapartes (sum of events before `from`)
+      const prevEvents = await prisma.cuotaparteEvent.findMany({
+        where: { asset: "wARS", fecha: { lt: from } },
+      });
+      for (const e of prevEvents) cuotapartesAcum += Number(e.cuotapartes);
+
+      for (const e of events) {
+        cuotapartesAcum += Number(e.cuotapartes);
+        cuotaparteEvents.push({
+          fecha: e.fecha.toISOString().slice(0, 10),
+          tipo: e.tipo,
+          montoARS: Number(e.montoARS),
+          vcpFCI: Number(e.vcpFCI),
+          cuotapartes: Number(e.cuotapartes),
+          descripcion: e.descripcion ?? "",
+          cuotapartesAcum,
+        });
+      }
+    } catch {
+      // Table might not exist
+    }
+  }
+
+  // 8. Coverage history (collateral vs supply day by day)
+  const coverageHistory: CoverageRow[] = [];
+  try {
+    const collateralByDate = await getCollateralTotalsByDate(asset, 365);
+    // Build supply map from snapshots
+    const supplyMap = new Map<string, number>();
+    for (const s of supplyHistory) {
+      supplyMap.set(s.date, s.total);
+    }
+
+    // Merge dates from both sources
+    const allCovDates = new Set<string>();
+    for (const d of collateralByDate.keys()) allCovDates.add(d);
+    for (const d of supplyMap.keys()) allCovDates.add(d);
+
+    const sortedCovDates = Array.from(allCovDates).sort();
+    const fromStr = from.toISOString().slice(0, 10);
+    const toStr = to.toISOString().slice(0, 10);
+    let lastSupply = 0;
+    let lastCollateral = 0;
+
+    for (const d of sortedCovDates) {
+      if (supplyMap.has(d)) lastSupply = supplyMap.get(d)!;
+      if (collateralByDate.has(d)) lastCollateral = collateralByDate.get(d)!;
+      if (d >= fromStr && d <= toStr && lastSupply > 0 && lastCollateral > 0) {
+        coverageHistory.push({
+          date: d,
+          collateral: lastCollateral,
+          supply: lastSupply,
+          ratio: (lastCollateral / lastSupply) * 100,
+        });
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 9. Collateral breakdown by date (composition at key dates)
+  const collateralBreakdown: CollateralBreakdownRow[] = [];
+  if (asset === "wARS") {
+    try {
+      // Get all allocations in range
+      const allocs = await prisma.collateralAllocation.findMany({
+        where: {
+          asset,
+          activo: true,
+          fecha: { gte: from, lte: to },
+        },
+        orderBy: { fecha: "asc" },
+        select: { fecha: true, tipo: true, nombre: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+      });
+
+      // Group by date
+      const byDate = new Map<string, typeof allocs>();
+      for (const a of allocs) {
+        const d = a.fecha.toISOString().slice(0, 10);
+        if (!byDate.has(d)) byDate.set(d, []);
+        byDate.get(d)!.push(a);
+      }
+
+      // Sample key dates (max ~15 to fit in report): first, last, monthly, and event dates
+      const eventDates = new Set(cuotaparteEvents.map((e) => e.fecha));
+      const allDates = Array.from(byDate.keys()).sort();
+      const sampledDates = new Set<string>();
+
+      // Always include first and last
+      if (allDates.length > 0) {
+        sampledDates.add(allDates[0]);
+        sampledDates.add(allDates[allDates.length - 1]);
+      }
+      // Include event dates
+      for (const d of eventDates) {
+        if (byDate.has(d)) sampledDates.add(d);
+      }
+      // Monthly snapshots (1st of each month)
+      for (const d of allDates) {
+        if (d.endsWith("-01") || d.endsWith("-02")) sampledDates.add(d);
+      }
+      // If still < 10, add some evenly spaced
+      if (sampledDates.size < 10 && allDates.length > 10) {
+        const step = Math.floor(allDates.length / 10);
+        for (let i = 0; i < allDates.length; i += step) sampledDates.add(allDates[i]);
+      }
+
+      for (const d of Array.from(sampledDates).sort()) {
+        const dayAllocs = byDate.get(d);
+        if (!dayAllocs) continue;
+        const items = dayAllocs.map((a) => ({
+          tipo: a.tipo,
+          nombre: a.nombre,
+          valor: Number(a.cantidadCuotasPartes) * Number(a.valorCuotaparte),
+        }));
+        const total = items.reduce((s, i) => s + i.valor, 0);
+        collateralBreakdown.push({ date: d, items, total });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 10. VCP history (portfolio value per cuotaparte)
+  const vcpHistory: VCPRow[] = [];
+  if (asset === "wARS") {
+    try {
+      const vcpRows = await prisma.portfolioVCP.findMany({
+        where: {
+          asset: "wARS",
+          fecha: { gte: from, lte: to },
+        },
+        orderBy: { fecha: "asc" },
+        select: { fecha: true, vcp: true, patrimonio: true, cuotapartesTotales: true },
+      });
+      for (const r of vcpRows) {
+        vcpHistory.push({
+          date: r.fecha.toISOString().slice(0, 10),
+          vcp: Number(r.vcp),
+          patrimonio: Number(r.patrimonio),
+          cuotapartes: Number(r.cuotapartesTotales),
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return {
     asset,
     assetName: config.name,
@@ -215,5 +412,9 @@ export async function getReportData(
     pools,
     currencyCode: currency.code,
     currencySymbol: currency.symbol,
+    cuotaparteEvents,
+    coverageHistory,
+    collateralBreakdown,
+    vcpHistory,
   };
 }

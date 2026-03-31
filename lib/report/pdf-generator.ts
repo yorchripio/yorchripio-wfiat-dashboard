@@ -224,14 +224,267 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     }
 
     // ═══════════════════════════════════════════════
-    // FOOTER
+    // 6. HISTORIAL DE EVENTOS (Suscripciones/Rescates) — AUDITORÍA
     // ═══════════════════════════════════════════════
-    const footerY = doc.page.height - 35;
-    doc.fontSize(7).fillColor("#999999")
-      .text(
-        `Generado: ${new Date().toISOString().slice(0, 19).replace("T", " ")} UTC | wFIAT Dashboard`,
-        50, footerY, { width: contentW, align: "center" }
-      );
+    if (data.cuotaparteEvents.length > 0) {
+      doc.addPage();
+      let evY = 50;
+
+      // Audit banner
+      doc.rect(0, 0, pageW, 35).fill(COLORS.primary);
+      doc.fontSize(11).fillColor("#FFFFFF").text("SECCIÓN DE AUDITORÍA", 50, 10, { width: contentW, align: "center" });
+      evY = 50;
+
+      evY = drawSectionTitle(doc, "Historial de Eventos de Capital", evY, assetColor);
+
+      doc.fontSize(8).fillColor(COLORS.textLight)
+        .text("Registro de todas las suscripciones y rescates de cuotapartes del FCI, conciliados con extractos bancarios.", 50, evY, { width: contentW });
+      evY += 18;
+
+      // Table header
+      const evCols = [
+        { label: "Fecha", x: 50, w: 55 },
+        { label: "Tipo", x: 105, w: 50 },
+        { label: "Monto (ARS)", x: 155, w: 85 },
+        { label: "VCP FCI", x: 240, w: 55 },
+        { label: "Cuotapartes", x: 295, w: 70 },
+        { label: "CP Acum.", x: 365, w: 60 },
+        { label: "Descripción", x: 425, w: 120 },
+      ];
+
+      doc.fontSize(6.5).fillColor(COLORS.textLight);
+      for (const col of evCols) {
+        doc.text(col.label, col.x, evY, { width: col.w });
+      }
+      evY += 11;
+      doc.strokeColor(COLORS.medGray).lineWidth(0.5)
+        .moveTo(50, evY).lineTo(50 + contentW, evY).stroke();
+      evY += 4;
+
+      for (const ev of data.cuotaparteEvents) {
+        evY = checkPageBreak(doc, evY, 14);
+        const isRescate = ev.tipo === "RESCATE";
+        const rowColor = isRescate ? "#b91c1c" : "#15803d";
+
+        doc.fontSize(7).fillColor(COLORS.text);
+        doc.text(ev.fecha.split("-").reverse().join("/"), evCols[0].x, evY, { width: evCols[0].w });
+        doc.fillColor(rowColor).text(ev.tipo, evCols[1].x, evY, { width: evCols[1].w });
+        doc.fillColor(COLORS.text)
+          .text(`$ ${fmtNum(ev.montoARS, 0)}`, evCols[2].x, evY, { width: evCols[2].w })
+          .text(fmtNum(ev.vcpFCI, 4), evCols[3].x, evY, { width: evCols[3].w })
+          .text(fmtNum(ev.cuotapartes, 2), evCols[4].x, evY, { width: evCols[4].w })
+          .text(fmtNum(ev.cuotapartesAcum, 2), evCols[5].x, evY, { width: evCols[5].w });
+        doc.fontSize(6).fillColor(COLORS.textLight)
+          .text(ev.descripcion.slice(0, 40), evCols[6].x, evY, { width: evCols[6].w });
+        evY += 13;
+      }
+
+      // Summary
+      evY += 8;
+      const totalSusc = data.cuotaparteEvents.filter((e) => e.tipo === "SUSCRIPCION").reduce((s, e) => s + e.montoARS, 0);
+      const totalResc = data.cuotaparteEvents.filter((e) => e.tipo === "RESCATE").reduce((s, e) => s + e.montoARS, 0);
+      const lastCpAcum = data.cuotaparteEvents[data.cuotaparteEvents.length - 1]?.cuotapartesAcum ?? 0;
+
+      doc.fontSize(8).fillColor(COLORS.primary)
+        .text(`Total suscripciones: $ ${fmtNum(totalSusc, 0)}  |  Total rescates: $ ${fmtNum(totalResc, 0)}  |  Cuotapartes finales: ${fmtNum(lastCpAcum, 2)}`, 50, evY, { width: contentW });
+      evY += 20;
+
+      curY = evY;
+    }
+
+    // ═══════════════════════════════════════════════
+    // 7. CONCILIACIÓN DE COBERTURA — AUDITORÍA
+    // ═══════════════════════════════════════════════
+    if (data.coverageHistory.length > 0) {
+      curY = checkPageBreak(doc, curY, 200);
+      if (curY < 60) {
+        // New page was added by checkPageBreak
+        curY = 50;
+      }
+      curY = drawSectionTitle(doc, "Conciliación de Cobertura (Supply vs Colateral)", curY, assetColor);
+
+      doc.fontSize(8).fillColor(COLORS.textLight)
+        .text("Verificación diaria de que el colateral total cubre el 100% del supply emitido en todas las cadenas.", 50, curY, { width: contentW });
+      curY += 18;
+
+      // Find min ratio
+      const minCov = data.coverageHistory.reduce((min, c) => c.ratio < min.ratio ? c : min, data.coverageHistory[0]);
+      const avgCov = data.coverageHistory.reduce((s, c) => s + c.ratio, 0) / data.coverageHistory.length;
+      const allAbove100 = data.coverageHistory.every((c) => c.ratio >= 100);
+
+      // Status box
+      const statusColor = allAbove100 ? "#15803d" : "#b91c1c";
+      const statusText = allAbove100
+        ? "✓ COBERTURA COMPLETA — El colateral cubrió el 100% del supply en todo el período"
+        : "✗ ALERTA — Hubo días con cobertura inferior al 100%";
+
+      doc.rect(50, curY, contentW, 22).fillAndStroke(allAbove100 ? "#f0fdf4" : "#fef2f2", statusColor);
+      doc.fontSize(8).fillColor(statusColor)
+        .text(statusText, 58, curY + 6, { width: contentW - 16 });
+      curY += 30;
+
+      // Metrics
+      doc.fontSize(8).fillColor(COLORS.text);
+      doc.text(`Ratio promedio: ${avgCov.toFixed(2)}%  |  Ratio mínimo: ${minCov.ratio.toFixed(2)}% (${minCov.date.split("-").reverse().join("/")})  |  Días analizados: ${data.coverageHistory.length}`, 50, curY, { width: contentW });
+      curY += 18;
+
+      // Chart
+      if (data.coverageHistory.length >= 2) {
+        curY = checkPageBreak(doc, curY, 160);
+        const covLineData = data.coverageHistory.map((c) => ({
+          date: new Date(c.date + "T00:00:00Z"),
+          value: c.ratio,
+        }));
+        drawLineChart(doc, covLineData, 50, curY, contentW, 130, {
+          color: allAbove100 ? "#15803d" : "#b91c1c",
+          yLabel: "Cobertura (%)",
+          yFormat: (v) => `${v.toFixed(1)}%`,
+          fillArea: true,
+        });
+        curY += 145;
+      }
+
+      // Sample table (key dates)
+      curY = checkPageBreak(doc, curY, 100);
+      doc.fontSize(7).fillColor(COLORS.textLight).text("Detalle de fechas clave:", 50, curY);
+      curY += 12;
+
+      const covCols = [
+        { label: "Fecha", x: 50, w: 70 },
+        { label: "Colateral (ARS)", x: 120, w: 120 },
+        { label: "Supply", x: 240, w: 100 },
+        { label: "Ratio", x: 340, w: 60 },
+        { label: "Estado", x: 400, w: 60 },
+      ];
+
+      doc.fontSize(6.5).fillColor(COLORS.textLight);
+      for (const col of covCols) doc.text(col.label, col.x, curY, { width: col.w });
+      curY += 10;
+      doc.strokeColor(COLORS.medGray).lineWidth(0.5)
+        .moveTo(50, curY).lineTo(50 + contentW, curY).stroke();
+      curY += 4;
+
+      // Sample: first, last, monthly, min ratio
+      const covSampled = sampleCoverageRows(data.coverageHistory, minCov.date);
+      for (const c of covSampled) {
+        curY = checkPageBreak(doc, curY, 13);
+        const ok = c.ratio >= 100;
+        doc.fontSize(7).fillColor(COLORS.text)
+          .text(c.date.split("-").reverse().join("/"), covCols[0].x, curY, { width: covCols[0].w })
+          .text(`$ ${fmtNum(c.collateral, 0)}`, covCols[1].x, curY, { width: covCols[1].w })
+          .text(fmtNum(c.supply, 2), covCols[2].x, curY, { width: covCols[2].w })
+          .text(`${c.ratio.toFixed(2)}%`, covCols[3].x, curY, { width: covCols[3].w });
+        doc.fillColor(ok ? "#15803d" : "#b91c1c")
+          .text(ok ? "OK" : "DEFICIT", covCols[4].x, curY, { width: covCols[4].w });
+        curY += 12;
+      }
+      curY += 10;
+    }
+
+    // ═══════════════════════════════════════════════
+    // 8. COMPOSICIÓN HISTÓRICA DEL COLATERAL — AUDITORÍA
+    // ═══════════════════════════════════════════════
+    if (data.collateralBreakdown.length > 0) {
+      curY = checkPageBreak(doc, curY, 180);
+      curY = drawSectionTitle(doc, "Composición Histórica del Colateral", curY, assetColor);
+
+      doc.fontSize(8).fillColor(COLORS.textLight)
+        .text("Distribución del colateral por instrumento en fechas clave. Muestra dónde estaba invertido el respaldo.", 50, curY, { width: contentW });
+      curY += 18;
+
+      for (const snapshot of data.collateralBreakdown) {
+        curY = checkPageBreak(doc, curY, 40 + snapshot.items.length * 12);
+
+        // Date header
+        doc.fontSize(8).fillColor(COLORS.primary)
+          .text(`${snapshot.date.split("-").reverse().join("/")}  —  Total: $ ${fmtNum(snapshot.total, 0)}`, 50, curY);
+        curY += 13;
+
+        for (const item of snapshot.items) {
+          const pct = snapshot.total > 0 ? ((item.valor / snapshot.total) * 100).toFixed(1) : "0";
+          doc.fontSize(7).fillColor(COLORS.text)
+            .text(`  ${item.tipo}`, 60, curY, { width: 90 });
+          doc.text(item.nombre.slice(0, 30), 150, curY, { width: 150 });
+          doc.text(`$ ${fmtNum(item.valor, 0)}`, 300, curY, { width: 100 });
+          doc.fillColor(COLORS.textLight).text(`${pct}%`, 400, curY, { width: 40 });
+          curY += 11;
+        }
+
+        curY += 6;
+        doc.strokeColor("#eeeeee").lineWidth(0.3)
+          .moveTo(50, curY).lineTo(50 + contentW, curY).stroke();
+        curY += 6;
+      }
+    }
+
+    // ═══════════════════════════════════════════════
+    // 9. EVOLUCIÓN VCP DEL PORTFOLIO — AUDITORÍA
+    // ═══════════════════════════════════════════════
+    if (data.vcpHistory.length >= 2) {
+      curY = checkPageBreak(doc, curY, 200);
+      curY = drawSectionTitle(doc, "Evolución del VCP (Valor Cuotaparte del Portfolio)", curY, assetColor);
+
+      doc.fontSize(8).fillColor(COLORS.textLight)
+        .text("El VCP mide el rendimiento real del colateral, eliminando la distorsión por entradas/salidas de capital (minteos y rescates).", 50, curY, { width: contentW });
+      curY += 18;
+
+      const firstVcp = data.vcpHistory[0];
+      const lastVcp = data.vcpHistory[data.vcpHistory.length - 1];
+      const vcpReturn = ((lastVcp.vcp / firstVcp.vcp) - 1) * 100;
+      const vcpDias = Math.round((new Date(lastVcp.date).getTime() - new Date(firstVcp.date).getTime()) / 86400000);
+      const vcpTNA = vcpDias > 0 ? (vcpReturn / vcpDias) * 365 : 0;
+
+      doc.fontSize(8).fillColor(COLORS.text)
+        .text(`VCP inicial: ${fmtNum(firstVcp.vcp, 6)} (${firstVcp.date.split("-").reverse().join("/")})  →  VCP final: ${fmtNum(lastVcp.vcp, 6)} (${lastVcp.date.split("-").reverse().join("/")})`, 50, curY, { width: contentW });
+      curY += 14;
+      doc.text(`Rendimiento del periodo: ${vcpReturn >= 0 ? "+" : ""}${vcpReturn.toFixed(4)}%  |  TNA: ${vcpTNA.toFixed(2)}%  |  Días: ${vcpDias}`, 50, curY, { width: contentW });
+      curY += 18;
+
+      // VCP chart
+      curY = checkPageBreak(doc, curY, 160);
+      const vcpLineData = data.vcpHistory.map((v) => ({
+        date: new Date(v.date + "T00:00:00Z"),
+        value: v.vcp,
+      }));
+      drawLineChart(doc, vcpLineData, 50, curY, contentW, 130, {
+        color: assetColor,
+        yLabel: "VCP",
+        yFormat: (v) => fmtNum(v, 4),
+        fillArea: true,
+      });
+      curY += 155;
+
+      // Patrimonio chart
+      curY = checkPageBreak(doc, curY, 160);
+      doc.fontSize(8).fillColor(COLORS.textLight).text("Patrimonio total (cuotapartes × VCP):", 50, curY);
+      curY += 14;
+      const patLineData = data.vcpHistory.map((v) => ({
+        date: new Date(v.date + "T00:00:00Z"),
+        value: v.patrimonio,
+      }));
+      drawLineChart(doc, patLineData, 50, curY, contentW, 130, {
+        color: COLORS.secondary,
+        yLabel: "Patrimonio (ARS)",
+        yFormat: (v) => `$${fmtNum(v)}`,
+        fillArea: true,
+      });
+      curY += 155;
+    }
+
+    // ═══════════════════════════════════════════════
+    // FOOTER (on every page)
+    // ═══════════════════════════════════════════════
+    const pages = doc.bufferedPageRange();
+    const totalPages = pages.count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      const footerY = doc.page.height - 35;
+      doc.fontSize(7).fillColor("#999999")
+        .text(
+          `Generado: ${new Date().toISOString().slice(0, 19).replace("T", " ")} UTC | wFIAT Dashboard | Página ${i + 1} de ${totalPages}`,
+          50, footerY, { width: contentW, align: "center" }
+        );
+    }
 
     doc.end();
   });
@@ -251,6 +504,38 @@ function checkPageBreak(doc: InstanceType<typeof import("pdfkit")>, curY: number
     return 50;
   }
   return curY;
+}
+
+import { type CoverageRow } from "./data-fetcher";
+
+/** Pick ~15 representative rows from coverage history: first, last, monthly, min ratio */
+function sampleCoverageRows(rows: CoverageRow[], minDate: string): CoverageRow[] {
+  if (rows.length <= 15) return rows;
+
+  const sampled = new Map<string, CoverageRow>();
+  // Always first and last
+  sampled.set(rows[0].date, rows[0]);
+  sampled.set(rows[rows.length - 1].date, rows[rows.length - 1]);
+  // Min ratio date
+  const minRow = rows.find((r) => r.date === minDate);
+  if (minRow) sampled.set(minRow.date, minRow);
+  // Monthly (first of each month or closest)
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const month = r.date.slice(0, 7); // YYYY-MM
+    if (!seen.has(month)) {
+      seen.add(month);
+      sampled.set(r.date, r);
+    }
+  }
+  // If still < 12, fill evenly
+  if (sampled.size < 12) {
+    const step = Math.floor(rows.length / 12);
+    for (let i = 0; i < rows.length; i += step) {
+      sampled.set(rows[i].date, rows[i]);
+    }
+  }
+  return Array.from(sampled.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 interface Instrumento {
