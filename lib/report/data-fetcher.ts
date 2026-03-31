@@ -3,7 +3,7 @@
 
 import { type AssetSymbol, TOKEN_CONFIGS } from "@/lib/blockchain/config";
 import { getTotalSupply } from "@/lib/blockchain/supply";
-import { getCollateralDataFromDB, getCollateralTotalsByDate } from "@/lib/db/collateral";
+import { getCollateralDataFromDB } from "@/lib/db/collateral";
 import {
   getWbrlCollateralData,
   getWmxnCollateralData,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/db/collateral-by-asset";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { prisma } from "@/lib/db";
-import { getHistoricalDataFromDB } from "@/lib/db/history";
+// getHistoricalDataFromDB removed — was hardcoded to wARS. Ratio now built from coverage data.
 import { FIXED_POOLS } from "@/lib/geckoterminal/constants";
 
 /** Pick ~15 key dates from a list: first, last, monthly, event dates */
@@ -184,26 +184,10 @@ export async function getReportData(
     // Table might not exist or be empty
   }
 
-  // 4. Ratio history — use the same robust logic as the dashboard
-  //    (interpolates supply to nearest known date, falls back to current supply)
-  let ratioHistory: { date: string; ratio: number }[] = [];
-  try {
-    const daysInRange = Math.ceil((to.getTime() - from.getTime()) / 86400000);
-    const historicalPoints = await getHistoricalDataFromDB(
-      Math.max(daysInRange + 30, 365),
-      supplyTotal > 0 ? supplyTotal : undefined
-    );
-    const fromTs = from.getTime();
-    const toTs = to.getTime();
-    ratioHistory = historicalPoints
-      .filter((p) => p.timestamp >= fromTs && p.timestamp <= toTs)
-      .map((p) => ({
-        date: p.fecha.split("/").reverse().join("-"), // DD/MM/YYYY → YYYY-MM-DD
-        ratio: p.ratio,
-      }));
-  } catch {
-    // Table might not exist
-  }
+  // 4. Ratio history — built from collateral snapshots + supply snapshots per asset
+  //    (previously used getHistoricalDataFromDB which was hardcoded to wARS)
+  const ratioHistory: { date: string; ratio: number }[] = [];
+  // Ratio will be computed after coverage history (section 8) to reuse the same data
 
   // 5. Rendimiento (VCP-based for wARS, RendimientoHistorico for others)
   let rendimiento: ReportData["rendimiento"] = null;
@@ -305,7 +289,18 @@ export async function getReportData(
     let collateralByDate = new Map<string, number>();
 
     if (asset === "wARS") {
-      collateralByDate = await getCollateralTotalsByDate(asset, 365);
+      // Query allocations per date directly — NO carry-forward (carry-forward
+      // inflates totals by keeping removed instrument types like A_la_Vista)
+      const allocs = await prisma.collateralAllocation.findMany({
+        where: { asset, activo: true, fecha: { gte: from, lte: to } },
+        orderBy: { fecha: "asc" },
+        select: { fecha: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+      });
+      for (const a of allocs) {
+        const d = a.fecha.toISOString().slice(0, 10);
+        const v = Number(a.cantidadCuotasPartes) * Number(a.valorCuotaparte);
+        collateralByDate.set(d, (collateralByDate.get(d) ?? 0) + v);
+      }
     } else if (asset === "wBRL") {
       // CDB positions grouped by fechaPosicao
       const positions = await prisma.wbrlCdbPosition.findMany({
@@ -380,6 +375,11 @@ export async function getReportData(
       }
     }
   } catch { /* ignore */ }
+
+  // 8b. Build ratioHistory from coverageHistory (works for ALL assets)
+  for (const c of coverageHistory) {
+    ratioHistory.push({ date: c.date, ratio: c.ratio });
+  }
 
   // 9. Collateral breakdown by date — ALL assets
   const collateralBreakdown: CollateralBreakdownRow[] = [];
