@@ -8,7 +8,7 @@ import { RatioHistoryChart } from "@/components/cards/RatioHistoryChart";
 import { type ColateralData } from "@/lib/sheets/collateral";
 import { type RendimientoDiario } from "@/lib/types/rendimiento";
 import { type HistoricalDataPoint } from "@/lib/sheets/history";
-import { RefreshCw, FileDown, ChevronDown } from "lucide-react";
+import { RefreshCw, FileDown, ChevronDown, Calendar } from "lucide-react";
 import { TokenSelect } from "@/components/ui/TokenSelect";
 import { WbrlDataSection } from "@/components/wbrl/WbrlDataSection";
 import { WbrlRendimientoCard } from "@/components/wbrl/WbrlRendimientoCard";
@@ -21,11 +21,17 @@ import { WclpDataSection } from "@/components/wclp/WclpDataSection";
 
 function ReportDownload({ asset }: { asset: string }) {
   const [open, setOpen] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setShowCustom(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -53,6 +59,10 @@ function ReportDownload({ asset }: { asset: string }) {
     return `/api/report/${asset}?from=${fromStr}&to=${toStr}`;
   };
 
+  const customUrl = customFrom && customTo
+    ? `/api/report/${asset}?from=${customFrom}&to=${customTo}`
+    : null;
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -64,7 +74,7 @@ function ReportDownload({ asset }: { asset: string }) {
         <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-[#010103]/10 py-1 z-50">
+        <div className="absolute right-0 mt-1 w-64 bg-white rounded-lg shadow-lg border border-[#010103]/10 py-1 z-50">
           {periods.map((p) => (
             <a
               key={p.days}
@@ -77,6 +87,54 @@ function ReportDownload({ asset }: { asset: string }) {
               {p.label}
             </a>
           ))}
+          <div className="border-t border-[#010103]/10 mt-1 pt-1">
+            <button
+              onClick={() => setShowCustom(!showCustom)}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-[#010103]/80 hover:bg-[#f5f5f5] transition-colors text-left"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Fechas personalizadas
+              <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${showCustom ? "rotate-180" : ""}`} />
+            </button>
+            {showCustom && (
+              <div className="px-4 pb-3 pt-1 space-y-2">
+                <div>
+                  <label className="block text-xs text-[#5f6e78] mb-1">Desde</label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-[#010103]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5f6e78]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#5f6e78] mb-1">Hasta</label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-[#010103]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5f6e78]"
+                  />
+                </div>
+                {customUrl ? (
+                  <a
+                    href={customUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-white bg-[#5f6e78] rounded-md hover:opacity-90 transition-colors"
+                    onClick={() => { setOpen(false); setShowCustom(false); }}
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    Descargar
+                  </a>
+                ) : (
+                  <div className="text-xs text-[#5f6e78]/60 text-center py-1">
+                    Seleccioná ambas fechas
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
