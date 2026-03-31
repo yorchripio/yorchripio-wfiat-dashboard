@@ -36,6 +36,7 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     const doc = new PDFDocument({
       size: "A4",
       margins: { top: 50, bottom: 50, left: 50, right: 50 },
+      bufferPages: true,
       info: {
         Title: `Reporte ${data.asset} - ${fmtDate(data.to)}`,
         Author: "wFIAT Dashboard",
