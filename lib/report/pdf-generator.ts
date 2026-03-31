@@ -517,28 +517,32 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     }
 
     // ═══════════════════════════════════════════════
-    // 11. RENDIMIENTO HISTÓRICO — AUDITORÍA (all assets)
+    // 11. RENDIMIENTO HISTÓRICO — AUDITORÍA (non-wARS; wARS uses VCP section above)
     // ═══════════════════════════════════════════════
-    if (data.rendimientoHistory.length >= 2) {
+    if (data.rendimientoHistory.length >= 2 && data.asset !== "wARS") {
       curY = checkPageBreak(doc, curY, 200);
       curY = drawSectionTitle(doc, "Rendimiento Histórico del Colateral", curY, assetColor);
 
-      const totalReturn = data.rendimientoHistory.reduce((s, r) => s + r.rendimiento, 0);
-      const avgDaily = totalReturn / data.rendimientoHistory.length;
-      const tnaEst = avgDaily * 365;
+      // Compound return: (1 + r1/100) * (1 + r2/100) * ... - 1
+      let compoundFactor = 1;
+      for (const r of data.rendimientoHistory) {
+        compoundFactor *= (1 + r.rendimiento / 100);
+      }
+      const totalReturn = (compoundFactor - 1) * 100;
+      const dias = data.rendimientoHistory.length;
+      const tnaEst = dias > 0 ? (totalReturn / dias) * 365 : 0;
+      const avgDaily = dias > 0 ? totalReturn / dias : 0;
 
       doc.fontSize(8).fillColor(COLORS.text)
-        .text(`Rendimiento acumulado del período: ${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(4)}%  |  Promedio diario: ${avgDaily.toFixed(4)}%  |  TNA estimada: ${tnaEst.toFixed(2)}%  |  Registros: ${data.rendimientoHistory.length}`, 50, curY, { width: contentW });
+        .text(`Rendimiento acumulado del período: ${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(4)}%  |  Promedio diario: ${avgDaily.toFixed(4)}%  |  TNA estimada: ${tnaEst.toFixed(2)}%  |  Registros: ${dias}`, 50, curY, { width: contentW });
       curY += 18;
 
-      // Chart
+      // Chart — cumulative compound return
       curY = checkPageBreak(doc, curY, 160);
-
-      // Build cumulative return for the chart
-      let cumReturn = 0;
+      let cumFactor = 1;
       const cumData = data.rendimientoHistory.map((r) => {
-        cumReturn += r.rendimiento;
-        return { date: new Date(r.date + "T00:00:00Z"), value: cumReturn };
+        cumFactor *= (1 + r.rendimiento / 100);
+        return { date: new Date(r.date + "T00:00:00Z"), value: (cumFactor - 1) * 100 };
       });
 
       drawLineChart(doc, cumData, 50, curY, contentW, 130, {
@@ -553,17 +557,20 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     // ═══════════════════════════════════════════════
     // FOOTER (on every page)
     // ═══════════════════════════════════════════════
-    const pages = doc.bufferedPageRange();
-    const totalPages = pages.count;
-    for (let i = 0; i < totalPages; i++) {
+    const range = doc.bufferedPageRange();
+    const totalPages = range.start + range.count;
+    for (let i = range.start; i < totalPages; i++) {
       doc.switchToPage(i);
       const footerY = doc.page.height - 35;
+      // Use lineBreak: false to prevent PDFKit from creating new pages
       doc.fontSize(7).fillColor("#999999")
         .text(
           `Generado: ${new Date().toISOString().slice(0, 19).replace("T", " ")} UTC | wFIAT Dashboard | Página ${i + 1} de ${totalPages}`,
-          50, footerY, { width: contentW, align: "center" }
+          50, footerY, { width: contentW, align: "center", lineBreak: false }
         );
     }
+    // Flush remaining pages — switch back to last page so doc.end() works cleanly
+    doc.switchToPage(totalPages - 1);
 
     doc.end();
   });
