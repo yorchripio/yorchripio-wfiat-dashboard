@@ -226,9 +226,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const historicalData = asset === "wARS"
-      ? await getHistoricalDataFromDB(365, supplyData.total)
-      : [];
+    const historicalData = await getHistoricalDataFromDB(365, supplyData.total, asset);
 
     const portfolioVCP = portfolioVCPRows.map((r: { fecha: Date; vcp: unknown; cuotapartesTotales: unknown; patrimonio: unknown }) => ({
       fecha: r.fecha.toISOString().slice(0, 10),

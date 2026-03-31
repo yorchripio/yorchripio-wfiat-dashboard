@@ -17,7 +17,8 @@ export async function GET(request: Request): Promise<NextResponse> {
         ? currentSupplyFallback
         : undefined;
 
-    const historicalData = await getHistoricalDataFromDB(365, validFallback);
+    const asset = searchParams.get("asset") ?? "wARS";
+    const historicalData = await getHistoricalDataFromDB(365, validFallback, asset);
     return NextResponse.json({
       success: true,
       data: historicalData,
