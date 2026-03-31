@@ -36,7 +36,6 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     const doc = new PDFDocument({
       size: "A4",
       margins: { top: 50, bottom: 50, left: 50, right: 50 },
-      bufferPages: true,
       info: {
         Title: `Reporte ${data.asset} - ${fmtDate(data.to)}`,
         Author: "wFIAT Dashboard",
@@ -555,22 +554,14 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     }
 
     // ═══════════════════════════════════════════════
-    // FOOTER (on every page)
+    // FOOTER (last page only — avoids blank page bug with switchToPage)
     // ═══════════════════════════════════════════════
-    const range = doc.bufferedPageRange();
-    const totalPages = range.start + range.count;
-    for (let i = range.start; i < totalPages; i++) {
-      doc.switchToPage(i);
-      const footerY = doc.page.height - 35;
-      // Use lineBreak: false to prevent PDFKit from creating new pages
-      doc.fontSize(7).fillColor("#999999")
-        .text(
-          `Generado: ${new Date().toISOString().slice(0, 19).replace("T", " ")} UTC | wFIAT Dashboard | Página ${i + 1} de ${totalPages}`,
-          50, footerY, { width: contentW, align: "center", lineBreak: false }
-        );
-    }
-    // Flush remaining pages — switch back to last page so doc.end() works cleanly
-    doc.switchToPage(totalPages - 1);
+    const footerY = doc.page.height - 35;
+    doc.fontSize(7).fillColor("#999999")
+      .text(
+        `Generado: ${new Date().toISOString().slice(0, 19).replace("T", " ")} UTC | wFIAT Dashboard`,
+        50, footerY, { width: contentW, align: "center" }
+      );
 
     doc.end();
   });
