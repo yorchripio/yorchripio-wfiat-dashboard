@@ -112,13 +112,13 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
       curY = drawSectionTitle(doc, "Rendimiento del Colateral", curY, assetColor);
 
       const r = data.rendimiento;
-      const metrics = [
+      const metrics: [string, string][] = [
         ["Rendimiento del periodo", `${r.periodReturn >= 0 ? "+" : ""}${r.periodReturn.toFixed(4)}%`],
         ["TNA (anualizada lineal)", `${r.tna.toFixed(2)}%`],
-        ["VCP inicial", fmtNum(r.vcpInicial, 4)],
-        ["VCP final", fmtNum(r.vcpFinal, 4)],
-        ["Periodo", `${r.diasCalendario} dias`],
       ];
+      if (r.vcpInicial > 0) metrics.push(["VCP inicial", fmtNum(r.vcpInicial, 4)]);
+      if (r.vcpFinal > 0) metrics.push(["VCP final", fmtNum(r.vcpFinal, 4)]);
+      metrics.push(["Periodo", `${r.diasCalendario} dias`]);
 
       for (const [label, value] of metrics) {
         doc.fontSize(9).fillColor(COLORS.textLight).text(label, 50, curY, { continued: true });
@@ -472,6 +472,84 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
     }
 
     // ═══════════════════════════════════════════════
+    // 10. HISTORIAL DE POSICIONES (non-wARS assets) — AUDITORÍA
+    // ═══════════════════════════════════════════════
+    if (data.positionHistory.length > 0) {
+      curY = checkPageBreak(doc, curY, 200);
+      curY = drawSectionTitle(doc, "Historial de Posiciones", curY, assetColor);
+
+      doc.fontSize(8).fillColor(COLORS.textLight)
+        .text("Detalle de las posiciones que respaldan el colateral en cada fecha reportada.", 50, curY, { width: contentW });
+      curY += 18;
+
+      // Group by date
+      const byDate = new Map<string, typeof data.positionHistory>();
+      for (const p of data.positionHistory) {
+        if (!byDate.has(p.date)) byDate.set(p.date, []);
+        byDate.get(p.date)!.push(p);
+      }
+
+      for (const [date, positions] of Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+        curY = checkPageBreak(doc, curY, 30 + positions.length * 22);
+        const dateTotal = positions.reduce((s, p) => s + p.valor, 0);
+
+        doc.fontSize(8).fillColor(COLORS.primary)
+          .text(`${date.split("-").reverse().join("/")}  —  Total: ${data.currencySymbol} ${fmtNum(dateTotal, 2)}`, 50, curY);
+        curY += 14;
+
+        for (const pos of positions) {
+          doc.fontSize(7).fillColor(COLORS.text)
+            .text(`${pos.detail}`, 60, curY, { width: 250 });
+          doc.text(`${data.currencySymbol} ${fmtNum(pos.valor, 2)}`, 310, curY, { width: 120 });
+          curY += 11;
+          if (pos.extra) {
+            doc.fontSize(6).fillColor(COLORS.textLight)
+              .text(pos.extra, 65, curY, { width: contentW - 20 });
+            curY += 10;
+          }
+        }
+        curY += 5;
+        doc.strokeColor("#eeeeee").lineWidth(0.3)
+          .moveTo(50, curY).lineTo(50 + contentW, curY).stroke();
+        curY += 6;
+      }
+    }
+
+    // ═══════════════════════════════════════════════
+    // 11. RENDIMIENTO HISTÓRICO — AUDITORÍA (all assets)
+    // ═══════════════════════════════════════════════
+    if (data.rendimientoHistory.length >= 2) {
+      curY = checkPageBreak(doc, curY, 200);
+      curY = drawSectionTitle(doc, "Rendimiento Histórico del Colateral", curY, assetColor);
+
+      const totalReturn = data.rendimientoHistory.reduce((s, r) => s + r.rendimiento, 0);
+      const avgDaily = totalReturn / data.rendimientoHistory.length;
+      const tnaEst = avgDaily * 365;
+
+      doc.fontSize(8).fillColor(COLORS.text)
+        .text(`Rendimiento acumulado del período: ${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(4)}%  |  Promedio diario: ${avgDaily.toFixed(4)}%  |  TNA estimada: ${tnaEst.toFixed(2)}%  |  Registros: ${data.rendimientoHistory.length}`, 50, curY, { width: contentW });
+      curY += 18;
+
+      // Chart
+      curY = checkPageBreak(doc, curY, 160);
+
+      // Build cumulative return for the chart
+      let cumReturn = 0;
+      const cumData = data.rendimientoHistory.map((r) => {
+        cumReturn += r.rendimiento;
+        return { date: new Date(r.date + "T00:00:00Z"), value: cumReturn };
+      });
+
+      drawLineChart(doc, cumData, 50, curY, contentW, 130, {
+        color: assetColor,
+        yLabel: "Rendimiento acumulado (%)",
+        yFormat: (v) => `${v.toFixed(2)}%`,
+        fillArea: true,
+      });
+      curY += 155;
+    }
+
+    // ═══════════════════════════════════════════════
     // FOOTER (on every page)
     // ═══════════════════════════════════════════════
     const pages = doc.bufferedPageRange();
@@ -506,7 +584,7 @@ function checkPageBreak(doc: InstanceType<typeof import("pdfkit")>, curY: number
   return curY;
 }
 
-import { type CoverageRow } from "./data-fetcher";
+import { type CoverageRow, type PositionSnapshotRow } from "./data-fetcher";
 
 /** Pick ~15 representative rows from coverage history: first, last, monthly, min ratio */
 function sampleCoverageRows(rows: CoverageRow[], minDate: string): CoverageRow[] {
