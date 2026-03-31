@@ -289,17 +289,48 @@ export async function getReportData(
     let collateralByDate = new Map<string, number>();
 
     if (asset === "wARS") {
-      // Query allocations per date directly — NO carry-forward (carry-forward
-      // inflates totals by keeping removed instrument types like A_la_Vista)
+      // Per-type carry-forward: each instrument type is carried forward until
+      // its last occurrence date. This avoids the old bug (A_la_Vista carried
+      // forever after being moved to FCI) while correctly filling gaps where
+      // FCI wasn't recorded (e.g. weekends/holidays).
       const allocs = await prisma.collateralAllocation.findMany({
         where: { asset, activo: true, fecha: { gte: from, lte: to } },
         orderBy: { fecha: "asc" },
-        select: { fecha: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+        select: { fecha: true, tipo: true, nombre: true, cantidadCuotasPartes: true, valorCuotaparte: true },
       });
+
+      // Group by date, sum per unique instrument key (tipo|nombre)
+      const allocsByDate = new Map<string, Map<string, number>>();
+      const lastDateByKey = new Map<string, string>();
+
       for (const a of allocs) {
         const d = a.fecha.toISOString().slice(0, 10);
+        const key = `${a.tipo}|${a.nombre}`;
         const v = Number(a.cantidadCuotasPartes) * Number(a.valorCuotaparte);
-        collateralByDate.set(d, (collateralByDate.get(d) ?? 0) + v);
+
+        if (!allocsByDate.has(d)) allocsByDate.set(d, new Map());
+        const dayMap = allocsByDate.get(d)!;
+        dayMap.set(key, (dayMap.get(key) ?? 0) + v);
+
+        if (!lastDateByKey.has(key) || d > lastDateByKey.get(key)!) {
+          lastDateByKey.set(key, d);
+        }
+      }
+
+      // Build totals with per-type carry-forward (drop types past their last date)
+      const sortedAllocDates = Array.from(allocsByDate.keys()).sort();
+      const latestByKey = new Map<string, number>();
+
+      for (const d of sortedAllocDates) {
+        const dayMap = allocsByDate.get(d)!;
+        for (const [key, val] of dayMap) {
+          latestByKey.set(key, val);
+        }
+        let total = 0;
+        for (const [key, val] of latestByKey) {
+          if (lastDateByKey.get(key)! >= d) total += val;
+        }
+        collateralByDate.set(d, total);
       }
     } else if (asset === "wBRL") {
       // CDB positions grouped by fechaPosicao

@@ -29,15 +29,42 @@ async function getCollateralByDateForAsset(
   fromDate.setUTCDate(fromDate.getUTCDate() - limit);
 
   if (asset === "wARS") {
+    // Per-type carry-forward: each instrument (tipo|nombre) is carried forward
+    // until its last occurrence date, then dropped. Avoids inflating totals
+    // with removed instruments while filling gaps (weekends/holidays).
     const allocs = await prisma.collateralAllocation.findMany({
       where: { asset, activo: true, fecha: { gte: fromDate } },
       orderBy: { fecha: "asc" },
-      select: { fecha: true, cantidadCuotasPartes: true, valorCuotaparte: true },
+      select: { fecha: true, tipo: true, nombre: true, cantidadCuotasPartes: true, valorCuotaparte: true },
     });
+
+    const allocsByDate = new Map<string, Map<string, number>>();
+    const lastDateByKey = new Map<string, string>();
+
     for (const a of allocs) {
       const d = a.fecha.toISOString().slice(0, 10);
+      const key = `${a.tipo}|${a.nombre}`;
       const v = Number(a.cantidadCuotasPartes) * Number(a.valorCuotaparte);
-      result.set(d, (result.get(d) ?? 0) + v);
+      if (!allocsByDate.has(d)) allocsByDate.set(d, new Map());
+      const dayMap = allocsByDate.get(d)!;
+      dayMap.set(key, (dayMap.get(key) ?? 0) + v);
+      if (!lastDateByKey.has(key) || d > lastDateByKey.get(key)!) {
+        lastDateByKey.set(key, d);
+      }
+    }
+
+    const sortedAllocDates = Array.from(allocsByDate.keys()).sort();
+    const latestByKey = new Map<string, number>();
+    for (const d of sortedAllocDates) {
+      const dayMap = allocsByDate.get(d)!;
+      for (const [key, val] of dayMap) {
+        latestByKey.set(key, val);
+      }
+      let total = 0;
+      for (const [key, val] of latestByKey) {
+        if (lastDateByKey.get(key)! >= d) total += val;
+      }
+      result.set(d, total);
     }
   } else if (asset === "wBRL") {
     const positions = await prisma.wbrlCdbPosition.findMany({
