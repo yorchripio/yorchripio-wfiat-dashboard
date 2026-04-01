@@ -140,62 +140,31 @@ export function WmxnRendimientoCard(): React.ReactElement {
   const periodMetrics = useMemo(() => {
     if (!summary || totalsByDate.length === 0) return null;
 
-    // Use today as the effective end date (extrapolated from rendimientoAnual)
+    // Always use Banregio's rendimientoAnual to derive period return.
+    // This is the fund's actual return rate, independent of capital flows.
     const today = new Date().toISOString().slice(0, 10);
     const fechaFin = today;
     const valorActual = summary.valorEstimadoHoy;
 
-    const endTotals = totalsMap.get(summary.fechaReporte);
-    if (!endTotals) return null;
+    const rendAnual = summary.rendimientoAnual ? summary.rendimientoAnual / 100 : 0;
+    const dailyRate = rendAnual > 0 ? Math.pow(1 + rendAnual, 1 / 365) - 1 : 0;
 
     const targetStart = computeTargetStart(fechaFin, activeQuick);
-    const closestStart = findClosestDate(sortedDates, targetStart);
 
-    const hasHistoricalStart = closestStart != null && closestStart < summary.fechaReporte;
-    const startTotals = hasHistoricalStart ? totalsMap.get(closestStart) : null;
+    const realStart = earliestInception ?? summary.fechaReporte;
+    const totalDias = daysBetween(realStart, fechaFin);
 
-    let pctPeriodo: number;
-    let dias: number;
-    let displayStart: string;
-    let isEstimated = false;
+    // Days for the requested period (capped to totalDias since inception)
+    const targetDias = daysBetween(targetStart, fechaFin);
+    const dias = Math.min(targetDias, totalDias);
 
-    if (startTotals) {
-      // Case 1: We have actual data at the start of the period
-      // Subtract net capital flows between start and end to isolate fund return
-      const base = startTotals.valorCartera;
-      const flowsDelta = endTotals.movimientosNetos - startTotals.movimientosNetos;
-      pctPeriodo = base > 0 ? (valorActual - base - flowsDelta) / base : 0;
-      dias = daysBetween(closestStart!, fechaFin);
-      displayStart = closestStart!;
-      isEstimated = summary.daysSinceReport > 0;
-    } else {
-      // Case 2: No historical data for start date — use Banregio's rendimientoAnual
-      // to derive daily rate and compound for the requested period
-      const rendAnual = summary.rendimientoAnual ? summary.rendimientoAnual / 100 : 0;
-      const dailyRate = rendAnual > 0 ? Math.pow(1 + rendAnual, 1 / 365) - 1 : 0;
+    const displayStart = dias < totalDias ? targetStart : realStart;
 
-      const realStart = earliestInception ?? summary.fechaReporte;
-      const totalDias = daysBetween(realStart, fechaFin);
+    // Period return: compound the fund's daily rate over the period
+    const pctPeriodo = dailyRate > 0 ? Math.pow(1 + dailyRate, dias) - 1 : 0;
 
-      // Days for the requested period (capped to totalDias)
-      const targetDias = daysBetween(targetStart, fechaFin);
-      dias = Math.min(targetDias, totalDias);
-
-      // Estimated return for the requested period using fund's actual daily rate
-      pctPeriodo = dailyRate > 0 ? Math.pow(1 + dailyRate, dias) - 1 : 0;
-
-      displayStart = dias < totalDias ? targetStart : realStart;
-      isEstimated = true;
-    }
-
-    // Plusvalia del periodo: value change minus capital flows
-    const flowsDeltaPlusvalia = startTotals
-      ? endTotals.movimientosNetos - startTotals.movimientosNetos
-      : 0;
-    // Plusvalia = rendimiento sobre el valor actual (excluye flujos de capital)
-    const plusvaliaPeriodo = startTotals
-      ? valorActual - startTotals.valorCartera - flowsDeltaPlusvalia
-      : valorActual * pctPeriodo; // Use calculated % applied to current value
+    // Plusvalia estimated from the period return applied to current portfolio value
+    const plusvaliaPeriodo = valorActual * pctPeriodo;
 
     // TNA = % periodo x (365 / dias)
     const tnaPeriodo = dias > 0 ? pctPeriodo * (365 / dias) : 0;
@@ -211,9 +180,9 @@ export function WmxnRendimientoCard(): React.ReactElement {
       plusvaliaPeriodo,
       tnaPeriodo,
       teaPeriodo,
-      isEstimated,
+      isEstimated: true, // Always estimated from rendimientoAnual
     };
-  }, [summary, activeQuick, totalsByDate, totalsMap, sortedDates, earliestInception]);
+  }, [summary, activeQuick, earliestInception]);
 
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
