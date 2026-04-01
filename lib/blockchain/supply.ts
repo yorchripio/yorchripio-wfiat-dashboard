@@ -139,17 +139,13 @@ function getTokenAddressForChain(asset: AssetSymbol, chain: ChainName): string {
 }
 
 export async function getTotalSupply(asset: AssetSymbol = "wARS"): Promise<TotalSupply> {
-  const chainNames: ChainName[] = ["ethereum", "worldchain", "base", "gnosis"];
+  const chainNames: ChainName[] = ["ethereum", "worldchain", "base", "gnosis", "polygon", "bsc"];
   const initialResults = await Promise.all(
     chainNames.map((name) => getSupplyFromChain(name, getTokenAddressForChain(asset, name)))
   );
 
-  const byName: Record<ChainName, ChainSupply> = {
-    ethereum: initialResults[0],
-    worldchain: initialResults[1],
-    base: initialResults[2],
-    gnosis: initialResults[3],
-  };
+  const byName = {} as Record<ChainName, ChainSupply>;
+  chainNames.forEach((name, i) => { byName[name] = initialResults[i]; });
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const failed = chainNames.filter((name) => !byName[name].success);
@@ -163,7 +159,7 @@ export async function getTotalSupply(asset: AssetSymbol = "wARS"): Promise<Total
     });
   }
 
-  const total = byName.ethereum.supply + byName.worldchain.supply + byName.base.supply + byName.gnosis.supply;
+  const total = chainNames.reduce((sum, name) => sum + byName[name].supply, 0);
   return {
     chains: byName,
     total,

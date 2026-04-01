@@ -29,8 +29,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    if (!supplyData.chains.gnosis.success) {
-      console.warn("[API /supply] Gnosis falló, devolviendo supply sin Gnosis");
+    for (const opt of ["gnosis", "polygon", "bsc"] as const) {
+      if (!supplyData.chains[opt].success) {
+        console.warn(`[API /supply] ${opt} falló, devolviendo supply sin ${opt}`);
+      }
     }
 
     return NextResponse.json({

@@ -252,6 +252,8 @@ export default function Dashboard(): React.ReactElement {
                 <SupplyCard data={supplyData.chains.worldchain} tokenId={selectedStable} />
                 <SupplyCard data={supplyData.chains.base} tokenId={selectedStable} />
                 <SupplyCard data={supplyData.chains.gnosis} tokenId={selectedStable} />
+                <SupplyCard data={supplyData.chains.polygon} tokenId={selectedStable} />
+                <SupplyCard data={supplyData.chains.bsc} tokenId={selectedStable} />
               </div>
             </div>
           </div>

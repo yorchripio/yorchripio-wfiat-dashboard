@@ -2,7 +2,7 @@
 // Logos SVG de las blockchains
 
 interface ChainLogoProps {
-  chain: "ethereum" | "worldchain" | "base" | "gnosis";
+  chain: "ethereum" | "worldchain" | "base" | "gnosis" | "polygon" | "bsc";
   className?: string;
   size?: number;
 }
@@ -94,24 +94,23 @@ export function ChainLogo({ chain, className = "", size = 24 }: ChainLogoProps) 
       </svg>
     ),
     gnosis: (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className={className}
-      >
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
         <circle cx="12" cy="12" r="12" fill="#04795B" />
-        <path
-          d="M7.5 10.5C7.5 8.01 9.51 6 12 6s4.5 2.01 4.5 4.5h-2.25c0-1.24-1.01-2.25-2.25-2.25S9.75 9.26 9.75 10.5H7.5Z"
-          fill="white"
-        />
-        <path
-          d="M16.5 13.5c0 2.49-2.01 4.5-4.5 4.5s-4.5-2.01-4.5-4.5h2.25c0 1.24 1.01 2.25 2.25 2.25s2.25-1.01 2.25-2.25H16.5Z"
-          fill="white"
-        />
+        <path d="M7.5 10.5C7.5 8.01 9.51 6 12 6s4.5 2.01 4.5 4.5h-2.25c0-1.24-1.01-2.25-2.25-2.25S9.75 9.26 9.75 10.5H7.5Z" fill="white" />
+        <path d="M16.5 13.5c0 2.49-2.01 4.5-4.5 4.5s-4.5-2.01-4.5-4.5h2.25c0 1.24 1.01 2.25 2.25 2.25s2.25-1.01 2.25-2.25H16.5Z" fill="white" />
         <rect x="7.5" y="11.25" width="9" height="1.5" fill="white" />
+      </svg>
+    ),
+    polygon: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        <circle cx="12" cy="12" r="12" fill="#8247E5" />
+        <path d="M15.5 9.2c-.3-.2-.7-.2-1 0l-2.3 1.4-1.6.9-2.3 1.4c-.3.2-.7.2-1 0l-1.8-1.1c-.3-.2-.5-.5-.5-.9V9.1c0-.4.2-.7.5-.9l1.8-1c.3-.2.7-.2 1 0l1.8 1.1c.3.2.5.5.5.9v1.4l1.6-.9V8.2c0-.4-.2-.7-.5-.9l-3.4-2c-.3-.2-.7-.2-1 0l-3.4 2c-.3.2-.5.5-.5.9v4c0 .4.2.7.5.9l3.4 2c.3.2.7.2 1 0l2.3-1.3 1.6-.9 2.3-1.3c.3-.2.7-.2 1 0l1.8 1c.3.2.5.5.5.9v1.8c0 .4-.2.7-.5.9l-1.8 1.1c-.3.2-.7.2-1 0l-1.8-1.1c-.3-.2-.5-.5-.5-.9v-1.4l-1.6.9v1.4c0 .4.2.7.5.9l3.4 2c.3.2.7.2 1 0l3.4-2c.3-.2.5-.5.5-.9v-4c0-.4-.2-.7-.5-.9l-3.4-2z" fill="white" />
+      </svg>
+    ),
+    bsc: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        <circle cx="12" cy="12" r="12" fill="#F0B90B" />
+        <path d="M12 5l2 2-3.5 3.5L12 12l4.5-4.5 2 2L12 16l-6.5-6.5 2-2L12 12l1.5-1.5L12 9l-2 2-2-2z" fill="white" />
       </svg>
     ),
   };

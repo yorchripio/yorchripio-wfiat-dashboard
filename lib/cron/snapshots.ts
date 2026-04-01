@@ -27,14 +27,16 @@ export async function takeSupplyAndCollateralSnapshots(): Promise<void> {
           console.warn(`[cron/snapshot] ${asset} supply incompleto, fallaron: ${coreFailed.join(", ")}`);
           continue;
         }
-        // Gnosis optional — warn but don't skip
-        if (!supplyData.chains.gnosis.success) {
-          console.warn(`[cron/snapshot] ${asset} Gnosis falló, guardando sin Gnosis`);
+        // Optional chains — warn but don't skip
+        for (const opt of ["gnosis", "polygon", "bsc"] as const) {
+          if (!supplyData.chains[opt].success) {
+            console.warn(`[cron/snapshot] ${asset} ${opt} falló, guardando sin ${opt}`);
+          }
         }
       }
 
       const chainsData: Record<string, { supply: number; success: boolean } | string> = { source: "cron" };
-      for (const c of ["ethereum", "worldchain", "base", "gnosis"] as const) {
+      for (const c of ["ethereum", "worldchain", "base", "gnosis", "polygon", "bsc"] as const) {
         chainsData[c] = { supply: supplyData.chains[c].supply, success: true };
       }
 

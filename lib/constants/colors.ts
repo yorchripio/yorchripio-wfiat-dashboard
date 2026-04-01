@@ -85,4 +85,14 @@ export const CHAIN_CARD_COLORS = {
     text: "text-emerald-700",
     badge: "bg-emerald-100 text-emerald-800",
   },
+  polygon: {
+    bg: "bg-purple-50",
+    text: "text-purple-700",
+    badge: "bg-purple-100 text-purple-800",
+  },
+  bsc: {
+    bg: "bg-yellow-50",
+    text: "text-yellow-700",
+    badge: "bg-yellow-100 text-yellow-800",
+  },
 } as const;

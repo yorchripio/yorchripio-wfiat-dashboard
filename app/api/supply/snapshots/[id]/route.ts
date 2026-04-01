@@ -79,6 +79,8 @@ export async function PATCH(
       worldchain: { supply: cj?.worldchain?.supply ?? 0, success: cj?.worldchain?.success ?? true },
       base: { supply: cj?.base?.supply ?? 0, success: cj?.base?.success ?? true },
       gnosis: { supply: cj?.gnosis?.supply ?? 0, success: cj?.gnosis?.success ?? true },
+      polygon: { supply: cj?.polygon?.supply ?? 0, success: cj?.polygon?.success ?? true },
+      bsc: { supply: cj?.bsc?.supply ?? 0, success: cj?.bsc?.success ?? true },
       source: (chainsJson?.source as string) ?? "cron",
     };
 
@@ -86,6 +88,8 @@ export async function PATCH(
     const wc = baseChains.worldchain as { supply: number; success: boolean };
     const bs = baseChains.base as { supply: number; success: boolean };
     const gn = baseChains.gnosis as { supply: number; success: boolean };
+    const pg = baseChains.polygon as { supply: number; success: boolean };
+    const bn = baseChains.bsc as { supply: number; success: boolean };
 
     if (parsed.data.ethereumSupply !== undefined) eth.supply = parsed.data.ethereumSupply;
     if (parsed.data.worldchainSupply !== undefined) wc.supply = parsed.data.worldchainSupply;
@@ -93,7 +97,7 @@ export async function PATCH(
 
     const newTotal =
       parsed.data.total ??
-      eth.supply + wc.supply + bs.supply + gn.supply;
+      eth.supply + wc.supply + bs.supply + gn.supply + pg.supply + bn.supply;
 
     let snapshotAt: Date | undefined;
     if (parsed.data.snapshotAt) {
