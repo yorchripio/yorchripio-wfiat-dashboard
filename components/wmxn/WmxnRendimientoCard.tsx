@@ -169,23 +169,20 @@ export function WmxnRendimientoCard(): React.ReactElement {
       displayStart = closestStart!;
       isEstimated = summary.daysSinceReport > 0;
     } else {
-      // Case 2: No historical data - use plusvalia as the return (excludes capital flows)
-      const capitalInvertido = summary.capitalInvertido;
-      const totalRet = capitalInvertido > 0
-        ? (valorActual - capitalInvertido) / capitalInvertido : 0;
+      // Case 2: No historical data for start date — use Banregio's rendimientoAnual
+      // to derive daily rate and compound for the requested period
+      const rendAnual = summary.rendimientoAnual ? summary.rendimientoAnual / 100 : 0;
+      const dailyRate = rendAnual > 0 ? Math.pow(1 + rendAnual, 1 / 365) - 1 : 0;
 
       const realStart = earliestInception ?? summary.fechaReporte;
       const totalDias = daysBetween(realStart, fechaFin);
-
-      // Daily compound rate from inception to today (estimated)
-      const dailyRate = totalDias > 0 ? Math.pow(1 + totalRet, 1 / totalDias) - 1 : 0;
 
       // Days for the requested period (capped to totalDias)
       const targetDias = daysBetween(targetStart, fechaFin);
       dias = Math.min(targetDias, totalDias);
 
-      // Estimated return for the requested period
-      pctPeriodo = Math.pow(1 + dailyRate, dias) - 1;
+      // Estimated return for the requested period using fund's actual daily rate
+      pctPeriodo = dailyRate > 0 ? Math.pow(1 + dailyRate, dias) - 1 : 0;
 
       displayStart = dias < totalDias ? targetStart : realStart;
       isEstimated = true;
@@ -195,9 +192,10 @@ export function WmxnRendimientoCard(): React.ReactElement {
     const flowsDeltaPlusvalia = startTotals
       ? endTotals.movimientosNetos - startTotals.movimientosNetos
       : 0;
+    // Plusvalia = rendimiento sobre el valor actual (excluye flujos de capital)
     const plusvaliaPeriodo = startTotals
       ? valorActual - startTotals.valorCartera - flowsDeltaPlusvalia
-      : valorActual - summary.capitalInvertido;
+      : valorActual * pctPeriodo; // Use calculated % applied to current value
 
     // TNA = % periodo x (365 / dias)
     const tnaPeriodo = dias > 0 ? pctPeriodo * (365 / dias) : 0;
