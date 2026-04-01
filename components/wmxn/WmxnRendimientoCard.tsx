@@ -161,13 +161,15 @@ export function WmxnRendimientoCard(): React.ReactElement {
 
     if (startTotals) {
       // Case 1: We have actual data at the start of the period
+      // Subtract net capital flows between start and end to isolate fund return
       const base = startTotals.valorCartera;
-      pctPeriodo = base > 0 ? (valorActual - base) / base : 0;
+      const flowsDelta = endTotals.movimientosNetos - startTotals.movimientosNetos;
+      pctPeriodo = base > 0 ? (valorActual - base - flowsDelta) / base : 0;
       dias = daysBetween(closestStart!, fechaFin);
       displayStart = closestStart!;
       isEstimated = summary.daysSinceReport > 0;
     } else {
-      // Case 2: No historical data - use capitalInvertido vs estimated current
+      // Case 2: No historical data - use plusvalia as the return (excludes capital flows)
       const capitalInvertido = summary.capitalInvertido;
       const totalRet = capitalInvertido > 0
         ? (valorActual - capitalInvertido) / capitalInvertido : 0;
@@ -189,9 +191,12 @@ export function WmxnRendimientoCard(): React.ReactElement {
       isEstimated = true;
     }
 
-    // Plusvalia del periodo (estimated: current value - capital)
+    // Plusvalia del periodo: value change minus capital flows
+    const flowsDeltaPlusvalia = startTotals
+      ? endTotals.movimientosNetos - startTotals.movimientosNetos
+      : 0;
     const plusvaliaPeriodo = startTotals
-      ? valorActual - startTotals.valorCartera
+      ? valorActual - startTotals.valorCartera - flowsDeltaPlusvalia
       : valorActual - summary.capitalInvertido;
 
     // TNA = % periodo x (365 / dias)

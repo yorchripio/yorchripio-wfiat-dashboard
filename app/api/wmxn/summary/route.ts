@@ -50,7 +50,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const fechaReporte = target.fechaReporte.toISOString().slice(0, 10);
 
-    // Rendimiento diario: compare with previous
+    // Rendimiento diario: compare with previous, excluding capital flows (movimientosNetos)
     let rendimientoDiario: number | null = null;
     let tnaDiario: number | null = null;
 
@@ -59,7 +59,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const prev = allPositions[idx + 1]; // sorted desc
       const prevVal = Number(prev.valorCartera);
       if (prevVal > 0) {
-        rendimientoDiario = ((Number(target.valorCartera) - prevVal) / prevVal) * 100;
+        // Subtract net capital flows between reports to isolate actual fund return
+        const movNetos = Number(target.movimientosNetos) - Number(prev.movimientosNetos);
+        const returnExFlows = Number(target.valorCartera) - prevVal - movNetos;
+        rendimientoDiario = (returnExFlows / prevVal) * 100;
         const daysBetween = Math.max(1, Math.round(
           (target.fechaReporte.getTime() - prev.fechaReporte.getTime()) / 86400000
         ));
