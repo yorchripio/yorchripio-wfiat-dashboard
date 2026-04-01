@@ -72,21 +72,28 @@ export async function PATCH(
       );
     }
 
-    const chainsJson = existing.chainsJson as Record<string, { supply?: number; success?: boolean }>;
-    const baseChains = {
-      ethereum: { supply: chainsJson?.ethereum?.supply ?? 0, success: chainsJson?.ethereum?.success ?? true },
-      worldchain: { supply: chainsJson?.worldchain?.supply ?? 0, success: chainsJson?.worldchain?.success ?? true },
-      base: { supply: chainsJson?.base?.supply ?? 0, success: chainsJson?.base?.success ?? true },
+    const chainsJson = existing.chainsJson as Record<string, { supply?: number; success?: boolean } | string>;
+    const cj = chainsJson as Record<string, { supply?: number; success?: boolean }>;
+    const baseChains: Record<string, { supply: number; success: boolean } | string> = {
+      ethereum: { supply: cj?.ethereum?.supply ?? 0, success: cj?.ethereum?.success ?? true },
+      worldchain: { supply: cj?.worldchain?.supply ?? 0, success: cj?.worldchain?.success ?? true },
+      base: { supply: cj?.base?.supply ?? 0, success: cj?.base?.success ?? true },
+      gnosis: { supply: cj?.gnosis?.supply ?? 0, success: cj?.gnosis?.success ?? true },
       source: (chainsJson?.source as string) ?? "cron",
     };
 
-    if (parsed.data.ethereumSupply !== undefined) baseChains.ethereum.supply = parsed.data.ethereumSupply;
-    if (parsed.data.worldchainSupply !== undefined) baseChains.worldchain.supply = parsed.data.worldchainSupply;
-    if (parsed.data.baseSupply !== undefined) baseChains.base.supply = parsed.data.baseSupply;
+    const eth = baseChains.ethereum as { supply: number; success: boolean };
+    const wc = baseChains.worldchain as { supply: number; success: boolean };
+    const bs = baseChains.base as { supply: number; success: boolean };
+    const gn = baseChains.gnosis as { supply: number; success: boolean };
+
+    if (parsed.data.ethereumSupply !== undefined) eth.supply = parsed.data.ethereumSupply;
+    if (parsed.data.worldchainSupply !== undefined) wc.supply = parsed.data.worldchainSupply;
+    if (parsed.data.baseSupply !== undefined) bs.supply = parsed.data.baseSupply;
 
     const newTotal =
       parsed.data.total ??
-      baseChains.ethereum.supply + baseChains.worldchain.supply + baseChains.base.supply;
+      eth.supply + wc.supply + bs.supply + gn.supply;
 
     let snapshotAt: Date | undefined;
     if (parsed.data.snapshotAt) {

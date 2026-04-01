@@ -219,12 +219,13 @@ export default function DataPage(): React.ReactElement {
     }
   };
 
-  const chainsFromSnap = (snap: SupplySnapshotRow): { ethereum: number; worldchain: number; base: number } => {
+  const chainsFromSnap = (snap: SupplySnapshotRow): { ethereum: number; worldchain: number; base: number; gnosis: number } => {
     const c = snap.chainsJson as Record<string, { supply?: number }>;
     return {
       ethereum: c?.ethereum?.supply ?? 0,
       worldchain: c?.worldchain?.supply ?? 0,
       base: c?.base?.supply ?? 0,
+      gnosis: c?.gnosis?.supply ?? 0,
     };
   };
 

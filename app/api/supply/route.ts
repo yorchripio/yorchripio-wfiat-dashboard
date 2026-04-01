@@ -16,7 +16,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const supplyData = await getTotalSupply(asset);
 
     if (!supplyData.allSuccessful) {
-      const failed = (["ethereum", "worldchain", "base"] as const).filter(
+      const failed = (["ethereum", "worldchain", "base", "gnosis"] as const).filter(
         (c) => !supplyData.chains[c].success
       );
       return NextResponse.json(

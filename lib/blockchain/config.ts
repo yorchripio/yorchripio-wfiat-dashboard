@@ -20,11 +20,11 @@ export const WMXN_CONFIG = {
   symbol: "wMXN",
   address: "0x337e7456b420bd3481e7fa61fa9850343d610d34", // World Chain only
   decimals: 18,
-  // Only deployed on World Chain
   chainAddresses: {
     ethereum: "",
     worldchain: "0x337e7456b420bd3481e7fa61fa9850343d610d34",
     base: "",
+    gnosis: "0x337e7456b420bd3481e7fa61fa9850343d610d34",
   },
 } as const;
 
@@ -37,6 +37,7 @@ export const WCOP_CONFIG = {
     ethereum: "",
     worldchain: "0x8a1d45e102e886510e891d2ec656a708991e2d76",
     base: "",
+    gnosis: "0x8a1d45e102e886510e891d2ec656a708991e2d76",
   },
 } as const;
 
@@ -49,6 +50,7 @@ export const WPEN_CONFIG = {
     ethereum: "",
     worldchain: "0x4f34c8b3b5fb6d98da888f0fea543d4d9c9f2ebe",
     base: "",
+    gnosis: "0x4f34c8b3b5fb6d98da888f0fea543d4d9c9f2ebe",
   },
 } as const;
 
@@ -61,6 +63,7 @@ export const WCLP_CONFIG = {
     ethereum: "",
     worldchain: "0x61d450a098b6a7f69fc4b98ce68198fe59768651",
     base: "",
+    gnosis: "0x61d450a098b6a7f69fc4b98ce68198fe59768651",
   },
 } as const;
 
@@ -97,6 +100,10 @@ const baseRpcUrls = parseRpcUrls(
   process.env.BASE_RPC,
   process.env.BASE_RPCS
 );
+const gnosisRpcUrls = parseRpcUrls(
+  process.env.GNOSIS_RPC,
+  process.env.GNOSIS_RPCS
+);
 
 export const CHAINS = {
   ethereum: {
@@ -122,6 +129,14 @@ export const CHAINS = {
     rpcUrls: baseRpcUrls,
     explorerUrl: "https://basescan.org",
     color: "#0052FF",
+  },
+  gnosis: {
+    id: 100,
+    name: "Gnosis",
+    rpcUrl: gnosisRpcUrls[0] ?? "https://rpc.gnosischain.com",
+    rpcUrls: gnosisRpcUrls.length > 0 ? gnosisRpcUrls : ["https://rpc.gnosischain.com"],
+    explorerUrl: "https://gnosisscan.io",
+    color: "#04795B",
   },
 } as const;
 

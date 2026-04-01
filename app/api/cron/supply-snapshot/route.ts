@@ -46,12 +46,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const supplyData = await getTotalSupply(asset);
 
         if (!supplyData.allSuccessful) {
-          const failed = (["ethereum", "worldchain", "base"] as const).filter(
+          const failed = (["ethereum", "worldchain", "base", "gnosis"] as const).filter(
             (c) => !supplyData.chains[c].success
           );
           console.warn(`[cron/supply-snapshot] ${asset} supply incompleto. Fallaron: ${failed.join(", ")}`);
           results[asset] = { total: 0, success: false, error: `Fallaron: ${failed.join(", ")}` };
           continue;
+        }
+
+        const chainsData: Record<string, { supply: number; success: boolean } | string> = { source: "cron" };
+        for (const c of ["ethereum", "worldchain", "base", "gnosis"] as const) {
+          chainsData[c] = { supply: supplyData.chains[c].supply, success: supplyData.chains[c].success };
         }
 
         const snapshotId = `cron-${asset}-${dateKey}`;
@@ -62,40 +67,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             id: snapshotId,
             asset,
             total: supplyData.total,
-            chainsJson: {
-              ethereum: {
-                supply: supplyData.chains.ethereum.supply,
-                success: supplyData.chains.ethereum.success,
-              },
-              worldchain: {
-                supply: supplyData.chains.worldchain.supply,
-                success: supplyData.chains.worldchain.success,
-              },
-              base: {
-                supply: supplyData.chains.base.supply,
-                success: supplyData.chains.base.success,
-              },
-              source: "cron",
-            },
+            chainsJson: chainsData,
             snapshotAt,
           },
           update: {
             total: supplyData.total,
-            chainsJson: {
-              ethereum: {
-                supply: supplyData.chains.ethereum.supply,
-                success: supplyData.chains.ethereum.success,
-              },
-              worldchain: {
-                supply: supplyData.chains.worldchain.supply,
-                success: supplyData.chains.worldchain.success,
-              },
-              base: {
-                supply: supplyData.chains.base.supply,
-                success: supplyData.chains.base.success,
-              },
-              source: "cron",
-            },
+            chainsJson: chainsData,
             snapshotAt,
           },
         });

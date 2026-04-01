@@ -2,7 +2,7 @@
 // Logos SVG de las blockchains
 
 interface ChainLogoProps {
-  chain: "ethereum" | "worldchain" | "base";
+  chain: "ethereum" | "worldchain" | "base" | "gnosis";
   className?: string;
   size?: number;
 }
@@ -91,6 +91,27 @@ export function ChainLogo({ chain, className = "", size = 24 }: ChainLogoProps) 
           fill="white"
           fillOpacity="0.6"
         />
+      </svg>
+    ),
+    gnosis: (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+      >
+        <circle cx="12" cy="12" r="12" fill="#04795B" />
+        <path
+          d="M7.5 10.5C7.5 8.01 9.51 6 12 6s4.5 2.01 4.5 4.5h-2.25c0-1.24-1.01-2.25-2.25-2.25S9.75 9.26 9.75 10.5H7.5Z"
+          fill="white"
+        />
+        <path
+          d="M16.5 13.5c0 2.49-2.01 4.5-4.5 4.5s-4.5-2.01-4.5-4.5h2.25c0 1.24 1.01 2.25 2.25 2.25s2.25-1.01 2.25-2.25H16.5Z"
+          fill="white"
+        />
+        <rect x="7.5" y="11.25" width="9" height="1.5" fill="white" />
       </svg>
     ),
   };

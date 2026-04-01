@@ -80,4 +80,9 @@ export const CHAIN_CARD_COLORS = {
     text: "text-sky-700",
     badge: "bg-sky-100 text-sky-800",
   },
+  gnosis: {
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    badge: "bg-emerald-100 text-emerald-800",
+  },
 } as const;
