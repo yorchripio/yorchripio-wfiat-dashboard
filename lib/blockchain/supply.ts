@@ -132,8 +132,9 @@ async function getSupplyFromChain(chainName: ChainName, tokenAddress: string = W
  */
 function getTokenAddressForChain(asset: AssetSymbol, chain: ChainName): string {
   const config = TOKEN_CONFIGS[asset];
-  if ("chainAddresses" in config && config.chainAddresses[chain]) {
-    return config.chainAddresses[chain];
+  if ("chainAddresses" in config) {
+    // If chainAddresses exists, use it — empty string means "not deployed on this chain"
+    return config.chainAddresses[chain] ?? "";
   }
   return config.address;
 }
