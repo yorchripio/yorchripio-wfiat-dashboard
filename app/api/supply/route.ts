@@ -15,17 +15,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const asset = (request.nextUrl.searchParams.get("asset") || "wARS") as AssetSymbol;
     const supplyData = await getTotalSupply(asset);
 
-    if (!supplyData.allSuccessful) {
-      const failed = (["ethereum", "worldchain", "base", "gnosis"] as const).filter(
-        (c) => !supplyData.chains[c].success
-      );
+    // Only fail if a CORE chain (ethereum, worldchain, base) fails.
+    // Gnosis is optional — if it fails we still return partial data.
+    const coreChains = ["ethereum", "worldchain", "base"] as const;
+    const coreFailed = coreChains.filter((c) => !supplyData.chains[c].success);
+    if (coreFailed.length > 0) {
       return NextResponse.json(
         {
           success: false,
-          error: `Supply incompleto: fallaron ${failed.join(", ")}`,
+          error: `Supply incompleto: fallaron ${coreFailed.join(", ")}`,
         },
         { status: 503 }
       );
+    }
+
+    if (!supplyData.chains.gnosis.success) {
+      console.warn("[API /supply] Gnosis falló, devolviendo supply sin Gnosis");
     }
 
     return NextResponse.json({

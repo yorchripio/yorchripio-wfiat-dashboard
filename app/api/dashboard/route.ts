@@ -197,7 +197,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ]);
 
     if (!supplyData.allSuccessful) {
-      const failed = (["ethereum", "worldchain", "base", "gnosis"] as const).filter(
+      const failed = (["ethereum", "worldchain", "base"] as const).filter(
         (chain) => !supplyData.chains[chain].success
       );
       return NextResponse.json(

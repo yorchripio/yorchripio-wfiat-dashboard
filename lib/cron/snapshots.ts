@@ -20,11 +20,17 @@ export async function takeSupplyAndCollateralSnapshots(): Promise<void> {
     try {
       const supplyData = await getTotalSupply(asset);
       if (!supplyData.allSuccessful) {
-        const failed = (["ethereum", "worldchain", "base", "gnosis"] as const).filter(
+        const coreFailed = (["ethereum", "worldchain", "base"] as const).filter(
           (c) => !supplyData.chains[c].success
         );
-        console.warn(`[cron/snapshot] ${asset} supply incompleto, fallaron: ${failed.join(", ")}`);
-        continue;
+        if (coreFailed.length > 0) {
+          console.warn(`[cron/snapshot] ${asset} supply incompleto, fallaron: ${coreFailed.join(", ")}`);
+          continue;
+        }
+        // Gnosis optional — warn but don't skip
+        if (!supplyData.chains.gnosis.success) {
+          console.warn(`[cron/snapshot] ${asset} Gnosis falló, guardando sin Gnosis`);
+        }
       }
 
       const chainsData: Record<string, { supply: number; success: boolean } | string> = { source: "cron" };

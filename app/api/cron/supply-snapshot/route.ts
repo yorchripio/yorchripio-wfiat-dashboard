@@ -46,12 +46,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const supplyData = await getTotalSupply(asset);
 
         if (!supplyData.allSuccessful) {
-          const failed = (["ethereum", "worldchain", "base", "gnosis"] as const).filter(
+          const coreFailed = (["ethereum", "worldchain", "base"] as const).filter(
             (c) => !supplyData.chains[c].success
           );
-          console.warn(`[cron/supply-snapshot] ${asset} supply incompleto. Fallaron: ${failed.join(", ")}`);
-          results[asset] = { total: 0, success: false, error: `Fallaron: ${failed.join(", ")}` };
-          continue;
+          if (coreFailed.length > 0) {
+            console.warn(`[cron/supply-snapshot] ${asset} supply incompleto. Fallaron: ${coreFailed.join(", ")}`);
+            results[asset] = { total: 0, success: false, error: `Fallaron: ${coreFailed.join(", ")}` };
+            continue;
+          }
+          if (!supplyData.chains.gnosis.success) {
+            console.warn(`[cron/supply-snapshot] ${asset} Gnosis falló, guardando sin Gnosis`);
+          }
         }
 
         const chainsData: Record<string, { supply: number; success: boolean } | string> = { source: "cron" };
