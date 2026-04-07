@@ -49,24 +49,27 @@ export function drawPieChart(
     }
   }
 
-  // Legend below chart
-  const legendY = cy + radius + 12;
-  const legendX = cx - radius - 20;
-  const lineHeight = 12;
-  const legendW = radius * 2 + 40;
+  // Legend below chart — horizontal layout
+  const legendY = cy + radius + 10;
+  const totalItems = data.length;
+  // Calculate total width to center the legend
+  const itemWidths = data.map((item) => {
+    const text = `${item.label} (${item.value.toFixed(1)}%)`;
+    return 12 + text.length * 4.2; // box + gap + approx text width at 7pt
+  });
+  const totalW = itemWidths.reduce((s, w) => s + w, 0) + (totalItems - 1) * 8;
+  let legendX = cx - totalW / 2;
 
   for (let i = 0; i < data.length; i++) {
     const item = data[i];
-    const y = legendY + i * lineHeight;
+    const text = `${item.label} (${item.value.toFixed(1)}%)`;
     doc.save();
-    doc.rect(legendX, y + 1, 7, 7).fill(item.color);
+    doc.rect(legendX, legendY + 1, 7, 7).fill(item.color);
     doc.fillColor("#333333")
-      .fontSize(6.5)
-      .text(`${item.label} (${item.value.toFixed(1)}%)`, legendX + 10, y, {
-        width: legendW - 10,
-        lineBreak: false,
-      });
+      .fontSize(7)
+      .text(text, legendX + 10, legendY, { lineBreak: false });
     doc.restore();
+    legendX += itemWidths[i] + 8;
   }
 }
 

@@ -81,24 +81,23 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         .text(`Actualizado: ${data.collateral.fecha}`, 50, curY);
       curY += 20;
 
-      // Instruments table + Pie chart side by side
+      // Instruments table, then pie chart below
       if (data.collateral.instrumentos.length > 0) {
-        const tableEndY = drawInstrumentTable(doc, data.collateral.instrumentos, curY, data.currencySymbol);
+        curY = drawInstrumentTable(doc, data.collateral.instrumentos, curY, data.currencySymbol);
+        curY += 10;
 
-        // Pie chart to the right of the table
+        // Pie chart centered below the table
         const pieData = data.collateral.instrumentos.map((inst, i) => ({
-          label: inst.nombre.slice(0, 25),
+          label: inst.nombre.slice(0, 30),
           value: inst.porcentaje,
           color: PIE_COLORS[i % PIE_COLORS.length],
         }));
         if (pieData.length > 1) {
-          const pieRadius = 45;
-          const pieCx = pageW - 95;
-          const pieCy = curY + 25;
-          drawPieChart(doc, pieData, pieCx, pieCy, pieRadius, 18);
+          const pieRadius = 50;
+          const pieCx = pageW / 2;
+          drawPieChart(doc, pieData, pieCx, curY + pieRadius + 5, pieRadius, 20);
+          curY += pieRadius * 2 + 15 + pieData.length * 14 + 10;
         }
-
-        curY = tableEndY + 10;
       }
     } else {
       doc.fontSize(10).fillColor(COLORS.textLight)
