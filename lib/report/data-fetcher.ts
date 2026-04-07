@@ -89,21 +89,11 @@ async function getCollateralAtDate(asset: AssetSymbol, atDate: Date): Promise<Co
     });
     if (!snap) return null;
     // Collateral = capitalWcop (mint amount) + rendimientos (interest earned)
-    // NOT saldoFinal which includes MM funds
-    const finandina = Number(snap.capitalWcop) + Number(snap.rendimientos);
-    // Also get Bitso COP balance at the same date
-    const bitso = await prisma.wcopBitsoBalance.findFirst({
-      where: { fecha: { lte: atDate } },
-      orderBy: { fecha: "desc" },
-    });
-    const bitsoVal = bitso ? Number(bitso.saldoCop) : 0;
-    const val = finandina + bitsoVal;
+    // NOT saldoFinal which includes MM funds. Bitso COP = MM funds, not collateral.
+    const val = Number(snap.capitalWcop) + Number(snap.rendimientos);
     const instrumentos: { id: string; nombre: string; tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB"; entidad: string; valorTotal: number; porcentaje: number; rendimientoDiario: number; activo: boolean }[] = [
-      { id: "finandina", nombre: "Capital wCOP + Rendimientos (Finandina)", tipo: "Cuenta_Remunerada", entidad: "Banco Finandina", valorTotal: finandina, porcentaje: val > 0 ? (finandina / val) * 100 : 100, rendimientoDiario: 0, activo: true },
+      { id: "finandina", nombre: "Capital wCOP + Rendimientos (Finandina)", tipo: "Cuenta_Remunerada", entidad: "Banco Finandina", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true },
     ];
-    if (bitsoVal > 0) {
-      instrumentos.push({ id: "bitso", nombre: "Saldo COP en Bitso", tipo: "A_la_Vista", entidad: "Bitso", valorTotal: bitsoVal, porcentaje: (bitsoVal / val) * 100, rendimientoDiario: 0, activo: true });
-    }
     return {
       fecha: snap.fechaCorte.toISOString().slice(0, 10), total: val,
       instrumentos,
@@ -579,36 +569,15 @@ export async function getReportData(
         collateralByDate.set(fp.fechaReporte.toISOString().slice(0, 10), Number(fp.valorCartera));
       }
     } else if (asset === "wCOP") {
-      // Collateral = capitalWcop + rendimientos (Finandina) + Bitso COP balance
-      // saldoFinal includes MM funds which are NOT collateral.
+      // Collateral = capitalWcop + rendimientos (Finandina only)
+      // saldoFinal includes MM funds. Bitso COP = MM funds. Neither is collateral.
       const snapshots = await prisma.wcopAccountSnapshot.findMany({
         where: { fechaCorte: { gte: from, lte: to } },
         orderBy: { fechaCorte: "asc" },
       });
-      // Get Bitso balances for the same period
-      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
-        where: { fecha: { gte: from, lte: to } },
-        orderBy: { fecha: "asc" },
-      });
-      const bitsoMap = new Map<string, number>();
-      for (const b of bitsoBalances) {
-        bitsoMap.set(b.fecha.toISOString().slice(0, 10), Number(b.saldoCop));
-      }
-      // Combine: for each Finandina date, add Bitso balance if available
-      let lastBitso = 0;
       for (const s of snapshots) {
         const d = s.fechaCorte.toISOString().slice(0, 10);
-        if (bitsoMap.has(d)) lastBitso = bitsoMap.get(d)!;
-        const finandinaCollateral = Number(s.capitalWcop) + Number(s.rendimientos);
-        collateralByDate.set(d, finandinaCollateral + lastBitso);
-      }
-      // Also add dates that only exist in Bitso (if Finandina doesn't have that date)
-      let lastFinandina = 0;
-      for (const s of snapshots) lastFinandina = Number(s.capitalWcop) + Number(s.rendimientos);
-      for (const [d, bitso] of bitsoMap) {
-        if (!collateralByDate.has(d)) {
-          collateralByDate.set(d, lastFinandina + bitso);
-        }
+        collateralByDate.set(d, Number(s.capitalWcop) + Number(s.rendimientos));
       }
     } else if (asset === "wCLP") {
       const snapshots = await prisma.wclpAccountSnapshot.findMany({
@@ -753,29 +722,15 @@ export async function getReportData(
         where: { fechaCorte: { gte: from, lte: to } },
         orderBy: { fechaCorte: "asc" },
       });
-      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
-        where: { fecha: { gte: from, lte: to } },
-        orderBy: { fecha: "asc" },
-      });
-      const bitsoMap = new Map<string, number>();
-      for (const b of bitsoBalances) {
-        bitsoMap.set(b.fecha.toISOString().slice(0, 10), Number(b.saldoCop));
-      }
-      let lastBitso = 0;
       for (const s of snapshots) {
         const d = s.fechaCorte.toISOString().slice(0, 10);
-        if (bitsoMap.has(d)) lastBitso = bitsoMap.get(d)!;
-        const finandina = Number(s.capitalWcop) + Number(s.rendimientos);
-        const items: { tipo: string; nombre: string; valor: number }[] = [
-          { tipo: "Cuenta_Remunerada", nombre: `Capital wCOP + Rendimientos (Finandina)`, valor: finandina },
-        ];
-        if (lastBitso > 0) {
-          items.push({ tipo: "A_la_Vista", nombre: `Saldo COP en Bitso`, valor: lastBitso });
-        }
+        const val = Number(s.capitalWcop) + Number(s.rendimientos);
         collateralBreakdown.push({
           date: d,
-          items,
-          total: finandina + lastBitso,
+          items: [
+            { tipo: "Cuenta_Remunerada", nombre: `Capital wCOP + Rendimientos (Finandina)`, valor: val },
+          ],
+          total: val,
         });
       }
     } else if (asset === "wCLP") {
@@ -860,22 +815,6 @@ export async function getReportData(
           valor: capRend,
           extra: `Capital wCOP: $${Number(s.capitalWcop).toLocaleString("es-CO")} | Rendimientos: $${Number(s.rendimientos).toLocaleString("es-CO")} | Saldo total cuenta: $${Number(s.saldoFinal).toLocaleString("es-CO")}`,
         });
-      }
-      // Add Bitso balance entries
-      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
-        where: { fecha: { gte: from, lte: to } },
-        orderBy: { fecha: "asc" },
-      });
-      for (const b of bitsoBalances) {
-        const bal = Number(b.saldoCop);
-        if (bal > 0) {
-          positionHistory.push({
-            date: b.fecha.toISOString().slice(0, 10),
-            detail: "Saldo COP en Bitso",
-            valor: bal,
-            extra: `Fuente: ${b.source}`,
-          });
-        }
       }
     } catch { /* ignore */ }
   } else if (asset === "wCLP") {
