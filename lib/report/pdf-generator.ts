@@ -384,8 +384,11 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         .moveTo(50, curY).lineTo(50 + contentW, curY).stroke();
       curY += 4;
 
-      // Sample: first, last, monthly, min ratio
-      const covSampled = sampleCoverageRows(data.coverageHistory, minCov.date);
+      // Sample rows: if has location (wCOP), show only first, last, and mint dates (supply changes)
+      // Otherwise, use the general sampling function
+      const covSampled = hasLocation
+        ? sampleMintRows(data.coverageHistory)
+        : sampleCoverageRows(data.coverageHistory, minCov.date);
       for (const c of covSampled) {
         curY = checkPageBreak(doc, curY, 13);
         const ok = c.ratio >= 100;
@@ -615,6 +618,24 @@ function checkPageBreak(doc: InstanceType<typeof import("pdfkit")>, curY: number
 }
 
 import { type CoverageRow, type PositionSnapshotRow } from "./data-fetcher";
+
+/** Pick only: first date, last date, and dates where supply changed (mint events) */
+function sampleMintRows(rows: CoverageRow[]): CoverageRow[] {
+  if (rows.length <= 3) return rows;
+  const sampled = new Map<string, CoverageRow>();
+  // Always first and last
+  sampled.set(rows[0].date, rows[0]);
+  sampled.set(rows[rows.length - 1].date, rows[rows.length - 1]);
+  // Dates where supply changed (mint/burn events)
+  for (let i = 1; i < rows.length; i++) {
+    if (Math.abs(rows[i].supply - rows[i - 1].supply) > 1) {
+      // Include the day before (last with old supply) and the day of change
+      sampled.set(rows[i - 1].date, rows[i - 1]);
+      sampled.set(rows[i].date, rows[i]);
+    }
+  }
+  return Array.from(sampled.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 /** Pick ~15 representative rows from coverage history: first, last, monthly, min ratio */
 function sampleCoverageRows(rows: CoverageRow[], minDate: string): CoverageRow[] {

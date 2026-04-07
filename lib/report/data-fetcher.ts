@@ -619,25 +619,27 @@ export async function getReportData(
       for (const b of bitsoBalances) {
         bitsoMap.set(b.fecha.toISOString().slice(0, 10), Number(b.saldoCop));
       }
+      // Find the date of the Bitso→Finandina transfer (first snapshot where capitalWcop >= 1M)
+      const transferDate = snapshots.find((s) => Number(s.capitalWcop) >= 1000000)
+        ?.fechaCorte.toISOString().slice(0, 10) ?? "2026-01-13";
+
       for (const s of snapshots) {
         const d = s.fechaCorte.toISOString().slice(0, 10);
         const capWcop = Number(s.capitalWcop);
         const rend = Number(s.rendimientos);
-        const bitsoVal = bitsoMap.get(d) ?? 0;
-        // Before the Bitso→Finandina transfer (Jan 13), collateral was in Bitso
-        // After: capitalWcop + rendimientos in Finandina
-        if (capWcop < 1000000 && bitsoVal > capWcop) {
-          // Pre-transfer: collateral = Bitso + Finandina (saldoFinal, todo era colateral)
+        if (d < transferDate) {
+          // Pre-transfer: collateral = Bitso + Finandina (todo era colateral)
+          const bitsoVal = bitsoMap.get(d) ?? 0;
           const finandinaVal = Number(s.saldoFinal);
           collateralByDate.set(d, bitsoVal + finandinaVal);
           collateralLocationByDate.set(d, "Bitso + Finandina");
         } else {
+          // Post-transfer: only capitalWcop + rendimientos in Finandina
           collateralByDate.set(d, capWcop + rend);
           collateralLocationByDate.set(d, "Cuenta Ahorro Finandina");
         }
       }
-      // Add Bitso-only dates (Jan 1-7 before first Finandina snapshot)
-      // For these dates we don't have a Finandina snapshot, carry forward last known saldoFinal
+      // Add Bitso-only dates ONLY for pre-transfer period (Jan 1-7 etc.)
       let lastFinandinaSaldo = 0;
       const preSnap = await prisma.wcopAccountSnapshot.findFirst({
         where: { fechaCorte: { lt: from } },
@@ -645,7 +647,7 @@ export async function getReportData(
       });
       if (preSnap) lastFinandinaSaldo = Number(preSnap.saldoFinal);
       for (const [d, bitso] of bitsoMap) {
-        if (!collateralByDate.has(d) && bitso > 1000000) {
+        if (!collateralByDate.has(d) && d < transferDate && bitso > 1000000) {
           collateralByDate.set(d, bitso + lastFinandinaSaldo);
           collateralLocationByDate.set(d, "Bitso + Finandina");
         }
