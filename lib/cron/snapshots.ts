@@ -7,7 +7,7 @@ import { getTotalSupply } from "@/lib/blockchain/supply";
 import { getCollateralDataFromDB } from "@/lib/db/collateral";
 import { prisma } from "@/lib/db";
 
-const SUPPLY_ASSETS = ["wARS", "wBRL"] as const;
+const SUPPLY_ASSETS = ["wARS", "wBRL", "wMXN", "wCOP", "wPEN", "wCLP"] as const;
 const TZ_ART = "America/Argentina/Buenos_Aires";
 
 export async function takeSupplyAndCollateralSnapshots(): Promise<void> {
