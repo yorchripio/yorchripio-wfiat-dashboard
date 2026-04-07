@@ -88,10 +88,23 @@ async function getCollateralAtDate(asset: AssetSymbol, atDate: Date): Promise<Co
       orderBy: { fechaCorte: "desc" },
     });
     if (!snap) return null;
-    const val = Number(snap.saldoFinal);
+    const finandina = Number(snap.saldoFinal);
+    // Also get Bitso COP balance at the same date
+    const bitso = await prisma.wcopBitsoBalance.findFirst({
+      where: { fecha: { lte: atDate } },
+      orderBy: { fecha: "desc" },
+    });
+    const bitsoVal = bitso ? Number(bitso.saldoCop) : 0;
+    const val = finandina + bitsoVal;
+    const instrumentos: { id: string; nombre: string; tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB"; entidad: string; valorTotal: number; porcentaje: number; rendimientoDiario: number; activo: boolean }[] = [
+      { id: "finandina", nombre: "Cuenta de Ahorro Finandina", tipo: "Cuenta_Remunerada", entidad: "Banco Finandina", valorTotal: finandina, porcentaje: val > 0 ? (finandina / val) * 100 : 100, rendimientoDiario: 0, activo: true },
+    ];
+    if (bitsoVal > 0) {
+      instrumentos.push({ id: "bitso", nombre: "Saldo COP en Bitso", tipo: "A_la_Vista", entidad: "Bitso", valorTotal: bitsoVal, porcentaje: (bitsoVal / val) * 100, rendimientoDiario: 0, activo: true });
+    }
     return {
       fecha: snap.fechaCorte.toISOString().slice(0, 10), total: val,
-      instrumentos: [{ id: "finandina", nombre: "Cuenta de Ahorro Finandina", tipo: "Cuenta_Remunerada" as const, entidad: "Banco Finandina", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true }],
+      instrumentos,
       totalFormatted: `$ ${Math.round(val).toLocaleString("es-CO")}`, timestamp: new Date().toISOString(), rendimientoCartera: 0,
     };
   }
@@ -564,14 +577,35 @@ export async function getReportData(
         collateralByDate.set(fp.fechaReporte.toISOString().slice(0, 10), Number(fp.valorCartera));
       }
     } else if (asset === "wCOP") {
-      // Use saldoFinal (full account balance) as collateral.
-      // Everything in the Finandina account backs the wCOP supply.
+      // Collateral = Finandina (saldoFinal) + Bitso COP balance
+      // Both accounts hold funds backing wCOP supply.
       const snapshots = await prisma.wcopAccountSnapshot.findMany({
         where: { fechaCorte: { gte: from, lte: to } },
         orderBy: { fechaCorte: "asc" },
       });
+      // Get Bitso balances for the same period
+      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
+        where: { fecha: { gte: from, lte: to } },
+        orderBy: { fecha: "asc" },
+      });
+      const bitsoMap = new Map<string, number>();
+      for (const b of bitsoBalances) {
+        bitsoMap.set(b.fecha.toISOString().slice(0, 10), Number(b.saldoCop));
+      }
+      // Combine: for each Finandina date, add Bitso balance if available
+      let lastBitso = 0;
       for (const s of snapshots) {
-        collateralByDate.set(s.fechaCorte.toISOString().slice(0, 10), Number(s.saldoFinal));
+        const d = s.fechaCorte.toISOString().slice(0, 10);
+        if (bitsoMap.has(d)) lastBitso = bitsoMap.get(d)!;
+        collateralByDate.set(d, Number(s.saldoFinal) + lastBitso);
+      }
+      // Also add dates that only exist in Bitso (if Finandina doesn't have that date)
+      let lastFinandina = 0;
+      for (const s of snapshots) lastFinandina = Number(s.saldoFinal); // track last known
+      for (const [d, bitso] of bitsoMap) {
+        if (!collateralByDate.has(d)) {
+          collateralByDate.set(d, lastFinandina + bitso);
+        }
       }
     } else if (asset === "wCLP") {
       const snapshots = await prisma.wclpAccountSnapshot.findMany({

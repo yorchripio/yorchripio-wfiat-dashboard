@@ -199,6 +199,20 @@ model WcopAccountSnapshot {
   @@map("wcop_account_snapshots")
 }
 
+/// Saldo diario de COP en Bitso (exchange) para wCOP.
+/// Los fondos en Bitso son parte del colateral total junto con Finandina.
+model WcopBitsoBalance {
+  id        String   @id @default(uuid())
+  fecha     DateTime @db.Date
+  saldoCop  Decimal  @db.Decimal(18, 2) @map("saldo_cop")
+  source    String   @default("bitso_report") // Origen del dato
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([fecha])
+  @@index([fecha])
+  @@map("wcop_bitso_balances")
+}
+
 /// Cache de pools de GeckoTerminal. Se actualiza cada 15 min vía cron.
 model GeckoPoolCache {
   id          String   @id // poolAddress
