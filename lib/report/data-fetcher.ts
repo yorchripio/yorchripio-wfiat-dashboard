@@ -447,6 +447,8 @@ export async function getReportData(
             rendimiento = { tna, periodReturn, vcpInicial: Number(first.valorCartera), vcpFinal: Number(last.valorCartera), diasCalendario: dias };
           }
         } else if (asset === "wCOP") {
+          // Rendimiento = intereses de la remunerada (rendimientos acumulados)
+          // NO usar saldoFinal que fluctúa por operaciones de Market Making
           const snapshots = await prisma.wcopAccountSnapshot.findMany({
             where: { fechaCorte: { gte: from, lte: to } },
             orderBy: { fechaCorte: "asc" },
@@ -454,14 +456,20 @@ export async function getReportData(
           if (snapshots.length >= 2) {
             const first = snapshots[0];
             const last = snapshots[snapshots.length - 1];
-            const firstVal = Number(first.saldoFinal);
-            const lastVal = Number(last.saldoFinal);
-            // Exclude capital movements (deposits/withdrawals)
-            const depositsNet = (Number(last.depositosMM) - Number(first.depositosMM)) - (Number(last.retirosMM) - Number(first.retirosMM));
-            const periodReturn = firstVal > 0 ? ((lastVal - firstVal - depositsNet) / firstVal) * 100 : 0;
+            const rendFirst = Number(first.rendimientos);
+            const rendLast = Number(last.rendimientos);
+            const interesesPeriodo = rendLast - rendFirst;
+            const capitalBase = Number(first.capitalWcop);
+            const periodReturn = capitalBase > 0 ? (interesesPeriodo / capitalBase) * 100 : 0;
             const dias = Math.round((last.fechaCorte.getTime() - first.fechaCorte.getTime()) / 86400000);
             const tna = dias > 0 ? (periodReturn / dias) * 365 : 0;
-            rendimiento = { tna, periodReturn, vcpInicial: firstVal, vcpFinal: lastVal, diasCalendario: dias };
+            rendimiento = {
+              tna,
+              periodReturn,
+              vcpInicial: capitalBase + rendFirst,
+              vcpFinal: Number(last.capitalWcop) + rendLast,
+              diasCalendario: dias,
+            };
           }
         }
       } catch { /* ignore */ }
