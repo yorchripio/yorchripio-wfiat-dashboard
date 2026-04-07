@@ -88,10 +88,17 @@ async function getCollateralAtDate(asset: AssetSymbol, atDate: Date): Promise<Co
       orderBy: { fechaCorte: "desc" },
     });
     if (!snap) return null;
-    const val = Number(snap.saldoFinal);
+    // Use capitalWcop (identified collateral) + rendimientos, NOT saldoFinal
+    // saldoFinal includes MM funds (Pexto/Koywe) which are not collateral
+    const capital = Number(snap.capitalWcop);
+    const rend = Number(snap.rendimientos);
+    const val = capital + rend;
     return {
       fecha: snap.fechaCorte.toISOString().slice(0, 10), total: val,
-      instrumentos: [{ id: "finandina", nombre: "Cuenta de Ahorro Finandina", tipo: "Cuenta_Remunerada" as const, entidad: "Banco Finandina", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true }],
+      instrumentos: [
+        { id: "capital", nombre: "Capital wCOP (Coopcentral → Finandina)", tipo: "Cuenta_Remunerada" as const, entidad: "Banco Finandina", valorTotal: capital, porcentaje: val > 0 ? (capital / val) * 100 : 100, rendimientoDiario: 0, activo: true },
+        { id: "rendimientos", nombre: "Rendimientos acumulados", tipo: "Cuenta_Remunerada" as const, entidad: "Banco Finandina", valorTotal: rend, porcentaje: val > 0 ? (rend / val) * 100 : 0, rendimientoDiario: 0, activo: true },
+      ],
       totalFormatted: `$ ${Math.round(val).toLocaleString("es-CO")}`, timestamp: new Date().toISOString(), rendimientoCartera: 0,
     };
   }
@@ -564,12 +571,18 @@ export async function getReportData(
         collateralByDate.set(fp.fechaReporte.toISOString().slice(0, 10), Number(fp.valorCartera));
       }
     } else if (asset === "wCOP") {
+      // Use capitalWcop (identified wCOP collateral transfers) NOT saldoFinal
+      // (which includes Market Making funds from Pexto/Koywe operations).
+      // capitalWcop = min($97,572,654 capital, saldo_total) per Excel methodology.
+      // Add cumulative rendimientos as they belong to the collateral.
       const snapshots = await prisma.wcopAccountSnapshot.findMany({
         where: { fechaCorte: { gte: from, lte: to } },
         orderBy: { fechaCorte: "asc" },
       });
       for (const s of snapshots) {
-        collateralByDate.set(s.fechaCorte.toISOString().slice(0, 10), Number(s.saldoFinal));
+        const capital = Number(s.capitalWcop);
+        const rend = Number(s.rendimientos);
+        collateralByDate.set(s.fechaCorte.toISOString().slice(0, 10), capital + rend);
       }
     } else if (asset === "wCLP") {
       const snapshots = await prisma.wclpAccountSnapshot.findMany({
