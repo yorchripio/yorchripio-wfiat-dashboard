@@ -16,6 +16,104 @@ import { prisma } from "@/lib/db";
 // getHistoricalDataFromDB removed — was hardcoded to wARS. Ratio now built from coverage data.
 import { FIXED_POOLS } from "@/lib/geckoterminal/constants";
 
+/**
+ * Get collateral data at a specific date (for historical reports).
+ * Returns the closest collateral data at or before the given date.
+ */
+async function getCollateralAtDate(asset: AssetSymbol, atDate: Date): Promise<ColateralData | null> {
+  const dateStr = atDate.toISOString().slice(0, 10);
+
+  if (asset === "wARS") {
+    // Get allocations at or before the target date
+    const allocs = await prisma.collateralAllocation.findMany({
+      where: { asset, activo: true, fecha: { lte: atDate } },
+      orderBy: { fecha: "desc" },
+    });
+    if (allocs.length === 0) return null;
+
+    // Get the latest date's allocations
+    const latestDate = allocs[0].fecha.toISOString().slice(0, 10);
+    const latestAllocs = allocs.filter((a) => a.fecha.toISOString().slice(0, 10) === latestDate);
+
+    const instrumentos = latestAllocs.map((a) => {
+      const val = Number(a.cantidadCuotasPartes) * Number(a.valorCuotaparte);
+      return {
+        id: a.id, nombre: a.nombre, tipo: a.tipo as "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB",
+        entidad: a.entidad ?? "", valorTotal: val, porcentaje: 0,
+        rendimientoDiario: Number(a.rendimientoDiario ?? 0), activo: true,
+      };
+    });
+    const total = instrumentos.reduce((s, i) => s + i.valorTotal, 0);
+    for (const inst of instrumentos) inst.porcentaje = total > 0 ? (inst.valorTotal / total) * 100 : 0;
+
+    return { fecha: latestDate, instrumentos, total, totalFormatted: `$ ${Math.round(total).toLocaleString("es-AR")}`, timestamp: new Date().toISOString(), rendimientoCartera: 0 };
+  }
+
+  if (asset === "wBRL") {
+    const latestPos = await prisma.wbrlCdbPosition.findFirst({
+      where: { esColateral: true, fechaPosicao: { lte: atDate } },
+      orderBy: { fechaPosicao: "desc" },
+      select: { fechaPosicao: true },
+    });
+    if (!latestPos) return null;
+    const positions = await prisma.wbrlCdbPosition.findMany({
+      where: { fechaPosicao: latestPos.fechaPosicao, esColateral: true },
+    });
+    const totalBruto = positions.reduce((s, p) => s + Number(p.valorBruto), 0);
+    const fecha = latestPos.fechaPosicao.toISOString().slice(0, 10);
+    return {
+      fecha, total: totalBruto,
+      instrumentos: [{ id: "cdb", nombre: `CDB 99% CDI (${positions.length} posiciones)`, tipo: "CDB" as const, entidad: positions[0]?.emisor ?? "Banco Genial", valorTotal: totalBruto, porcentaje: 100, rendimientoDiario: 0, activo: true }],
+      totalFormatted: `R$ ${totalBruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, timestamp: new Date().toISOString(), rendimientoCartera: 0,
+    };
+  }
+
+  if (asset === "wMXN") {
+    const fp = await prisma.wmxnFundPosition.findFirst({
+      where: { fechaReporte: { lte: atDate } },
+      orderBy: { fechaReporte: "desc" },
+    });
+    if (!fp) return null;
+    const val = Number(fp.valorCartera);
+    return {
+      fecha: fp.fechaReporte.toISOString().slice(0, 10), total: val,
+      instrumentos: [{ id: "fondo", nombre: `Fondo de Inversión REGIO1 Serie ${fp.serie}`, tipo: "FCI" as const, entidad: "Banregio (GBM)", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true }],
+      totalFormatted: `$ ${val.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`, timestamp: new Date().toISOString(), rendimientoCartera: 0,
+    };
+  }
+
+  if (asset === "wCOP") {
+    const snap = await prisma.wcopAccountSnapshot.findFirst({
+      where: { fechaCorte: { lte: atDate } },
+      orderBy: { fechaCorte: "desc" },
+    });
+    if (!snap) return null;
+    const val = Number(snap.saldoFinal);
+    return {
+      fecha: snap.fechaCorte.toISOString().slice(0, 10), total: val,
+      instrumentos: [{ id: "finandina", nombre: "Cuenta de Ahorro Finandina", tipo: "Cuenta_Remunerada" as const, entidad: "Banco Finandina", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true }],
+      totalFormatted: `$ ${Math.round(val).toLocaleString("es-CO")}`, timestamp: new Date().toISOString(), rendimientoCartera: 0,
+    };
+  }
+
+  if (asset === "wCLP") {
+    const snap = await prisma.wclpAccountSnapshot.findFirst({
+      where: { fechaCorte: { lte: atDate } },
+      orderBy: { fechaCorte: "desc" },
+    });
+    if (!snap) return null;
+    const val = Number(snap.saldoFinal);
+    return {
+      fecha: snap.fechaCorte.toISOString().slice(0, 10), total: val,
+      instrumentos: [{ id: "bci", nombre: "Cuenta Corriente BCI", tipo: "A_la_Vista" as const, entidad: "Banco BCI", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true }],
+      totalFormatted: `$ ${Math.round(val).toLocaleString("es-CL")}`, timestamp: new Date().toISOString(), rendimientoCartera: 0,
+    };
+  }
+
+  // wPEN fallback
+  return null;
+}
+
 /** Pick ~15 key dates from a list: first, last, monthly, event dates */
 function sampleDates(allDates: string[], eventDates: Set<string>): string[] {
   const sampled = new Set<string>();
@@ -133,16 +231,25 @@ export async function getReportData(
   const config = TOKEN_CONFIGS[asset];
   const currency = CURRENCY_MAP[asset] ?? { code: asset, symbol: "$" };
 
-  // 1. Collateral
+  // 1. Collateral — filtered by report end date (to), not "latest"
+  const today = new Date().toISOString().slice(0, 10);
+  const toStr = to.toISOString().slice(0, 10);
+  const isCurrentPeriod = toStr >= today;
   let collateral: ColateralData | null = null;
   try {
-    switch (asset) {
-      case "wBRL": collateral = await getWbrlCollateralData(); break;
-      case "wMXN": collateral = await getWmxnCollateralData(); break;
-      case "wCOP": collateral = await getWcopCollateralData(); break;
-      case "wPEN": collateral = await getWpenCollateralData(); break;
-      case "wCLP": collateral = await getWclpCollateralData(); break;
-      default: collateral = await getCollateralDataFromDB(); break;
+    if (isCurrentPeriod) {
+      // Current period: use live collateral functions
+      switch (asset) {
+        case "wBRL": collateral = await getWbrlCollateralData(); break;
+        case "wMXN": collateral = await getWmxnCollateralData(); break;
+        case "wCOP": collateral = await getWcopCollateralData(); break;
+        case "wPEN": collateral = await getWpenCollateralData(); break;
+        case "wCLP": collateral = await getWclpCollateralData(); break;
+        default: collateral = await getCollateralDataFromDB(); break;
+      }
+    } else {
+      // Historical report: get collateral at the report end date
+      collateral = await getCollateralAtDate(asset, to);
     }
   } catch (err) {
     console.error(`[report] Error getting collateral for ${asset}:`, err);
@@ -157,10 +264,6 @@ export async function getReportData(
       where: { asset, snapshotAt: { lte: to } },
       orderBy: { snapshotAt: "desc" },
     });
-
-    const today = new Date().toISOString().slice(0, 10);
-    const toStr = to.toISOString().slice(0, 10);
-    const isCurrentPeriod = toStr >= today;
 
     if (!isCurrentPeriod && endSnapshot) {
       // Historical report: use the snapshot total and chain breakdown from snapshot JSON
@@ -180,11 +283,20 @@ export async function getReportData(
       }
     } else {
       // Current period or no snapshot: use live on-chain data
-      const supply = await getTotalSupply(asset);
-      supplyTotal = supply.total;
-      for (const [chain, data] of Object.entries(supply.chains)) {
-        if (data.success && data.supply > 0) {
-          supplyByChain.push({ chain, supply: data.supply });
+      try {
+        const supply = await getTotalSupply(asset);
+        supplyTotal = supply.total;
+        for (const [chain, data] of Object.entries(supply.chains)) {
+          if (data.success && data.supply > 0) {
+            supplyByChain.push({ chain, supply: data.supply });
+          }
+        }
+      } catch (liveErr) {
+        console.error(`[report] Live supply failed for ${asset}, trying snapshot fallback:`, liveErr);
+        // Fallback: use any available snapshot
+        if (endSnapshot) {
+          supplyTotal = Number(endSnapshot.total);
+          supplyByChain.push({ chain: "total (snapshot)", supply: supplyTotal });
         }
       }
     }
@@ -504,13 +616,14 @@ export async function getReportData(
       }
     }
 
+    console.log(`[report][${asset}] Coverage debug: collateralByDate.size=${collateralByDate.size}, supplyMap.size=${supplyMap.size}, supplyTotal=${supplyTotal}, hasSupplyInRange=${hasSupplyInRange}`);
+
     const allCovDates = new Set<string>();
     for (const d of collateralByDate.keys()) allCovDates.add(d);
     for (const d of supplyMap.keys()) allCovDates.add(d);
 
     const sortedCovDates = Array.from(allCovDates).sort();
     const fromStr = from.toISOString().slice(0, 10);
-    const toStr = to.toISOString().slice(0, 10);
     let lastSupply = 0;
     let lastCollateral = 0;
 
