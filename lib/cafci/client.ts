@@ -52,7 +52,10 @@ export async function fetchAdcapCuotaparte(
       );
 
       if (fund && typeof fund.vcp === "number" && fund.vcp > 0) {
-        return { fecha: dateStr, vcp: fund.vcp };
+        // CAFCI reports VCP in "thousands" scale (~18500). Our DB stores in
+        // "units" scale (~18.5) after the 2026-04 VCP normalisation.
+        // Divide by 1000 so the value matches the DB convention.
+        return { fecha: dateStr, vcp: fund.vcp / 1000 };
       }
     } catch (err) {
       console.error(`[CAFCI] Error fetching ${dateStr}:`, err);

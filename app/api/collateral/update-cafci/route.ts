@@ -65,6 +65,18 @@ export async function POST(): Promise<NextResponse> {
     const daysBetween = Math.max(1, Math.round(
       (cafciDate.getTime() - latestFci.fecha.getTime()) / 86400000
     ));
+
+    // Guard: if CAFCI VCP / prev VCP ratio is wildly off (>10x or <0.1x),
+    // abort — likely a scale mismatch between CAFCI source and DB.
+    const vcpRatio = prevVcp > 0 ? cafciData.vcp / prevVcp : 1;
+    if (vcpRatio > 10 || vcpRatio < 0.1) {
+      console.error(`[update-cafci] Scale mismatch: CAFCI vcp=${cafciData.vcp}, DB prevVcp=${prevVcp}, ratio=${vcpRatio.toFixed(2)}`);
+      return NextResponse.json({
+        success: false,
+        error: `VCP scale mismatch: CAFCI=${cafciData.vcp.toFixed(4)}, DB=${prevVcp.toFixed(4)} (ratio ${vcpRatio.toFixed(1)}x). Check CAFCI normalization.`,
+      }, { status: 422 });
+    }
+
     const dailyRate = prevVcp > 0 ? Math.pow(cafciData.vcp / prevVcp, 1 / daysBetween) - 1 : 0;
 
     // Build dates: CAFCI date (real) + days until today (estimated)
