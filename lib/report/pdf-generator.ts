@@ -77,8 +77,12 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         .text(`${data.currencySymbol} ${fmtNum(data.collateral.total, 2)}`, 50, curY);
       curY += 28;
 
+      // Format date: if ISO "2026-04-01" → "01/04/2026"
+      const fechaDisplay = data.collateral.fecha.includes("-")
+        ? data.collateral.fecha.split("-").reverse().join("/")
+        : data.collateral.fecha;
       doc.fontSize(8).fillColor(COLORS.textLight)
-        .text(`Actualizado: ${data.collateral.fecha}`, 50, curY);
+        .text(`Actualizado: ${fechaDisplay}`, 50, curY);
       curY += 20;
 
       // Instruments table, then pie chart below
@@ -119,8 +123,9 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         ["Rendimiento del periodo", `${r.periodReturn >= 0 ? "+" : ""}${r.periodReturn.toFixed(4)}%`],
         ["TNA (anualizada lineal)", `${r.tna.toFixed(2)}%`],
       ];
-      if (r.vcpInicial > 0) metrics.push(["VCP inicial", fmtNum(r.vcpInicial, 4)]);
-      if (r.vcpFinal > 0) metrics.push(["VCP final", fmtNum(r.vcpFinal, 4)]);
+      const isWARS = data.asset === "wARS";
+      if (r.vcpInicial > 0) metrics.push([isWARS ? "VCP inicial" : "Valor inicial", `${data.currencySymbol} ${fmtNum(r.vcpInicial, isWARS ? 4 : 2)}`]);
+      if (r.vcpFinal > 0) metrics.push([isWARS ? "VCP final" : "Valor final", `${data.currencySymbol} ${fmtNum(r.vcpFinal, isWARS ? 4 : 2)}`]);
       metrics.push(["Periodo", `${r.diasCalendario} dias`]);
 
       for (const [label, value] of metrics) {

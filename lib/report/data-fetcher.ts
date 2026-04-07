@@ -210,7 +210,7 @@ export async function getReportData(
       }
     } catch { /* ignore */ }
   } else {
-    // For other assets, calculate from RendimientoHistorico
+    // For other assets, first try RendimientoHistorico
     try {
       const rh = await prisma.rendimientoHistorico.findMany({
         where: { asset, fecha: { gte: from, lte: to } },
@@ -223,6 +223,78 @@ export async function getReportData(
         rendimiento = { tna, periodReturn: totalReturn, vcpInicial: 0, vcpFinal: 0, diasCalendario: dias };
       }
     } catch { /* ignore */ }
+
+    // Fallback: compute rendimiento from position data if RendimientoHistorico is empty
+    if (!rendimiento) {
+      try {
+        if (asset === "wBRL") {
+          // Compare total CDB value between first and last date in period
+          const positions = await prisma.wbrlCdbPosition.findMany({
+            where: { esColateral: true, fechaPosicao: { gte: from, lte: to } },
+            orderBy: { fechaPosicao: "asc" },
+          });
+          if (positions.length > 0) {
+            const byDate = new Map<string, number>();
+            for (const p of positions) {
+              const d = p.fechaPosicao.toISOString().slice(0, 10);
+              byDate.set(d, (byDate.get(d) ?? 0) + Number(p.valorBruto));
+            }
+            const dates = Array.from(byDate.keys()).sort();
+            if (dates.length >= 2) {
+              const firstVal = byDate.get(dates[0])!;
+              const lastVal = byDate.get(dates[dates.length - 1])!;
+              const periodReturn = ((lastVal / firstVal) - 1) * 100;
+              const dias = Math.round((new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000);
+              const tna = dias > 0 ? (periodReturn / dias) * 365 : 0;
+              rendimiento = { tna, periodReturn, vcpInicial: firstVal, vcpFinal: lastVal, diasCalendario: dias };
+            }
+          }
+        } else if (asset === "wMXN") {
+          const fundPositions = await prisma.wmxnFundPosition.findMany({
+            where: { fechaReporte: { gte: from, lte: to } },
+            orderBy: { fechaReporte: "asc" },
+          });
+          if (fundPositions.length >= 2) {
+            const first = fundPositions[0];
+            const last = fundPositions[fundPositions.length - 1];
+            // Use rendimientoAnual from Banregio to compute period return
+            const rendAnual = last.rendimientoAnual ? Number(last.rendimientoAnual) / 100 : 0;
+            const dias = Math.round((last.fechaReporte.getTime() - first.fechaReporte.getTime()) / 86400000);
+            let periodReturn = 0;
+            let tna = 0;
+            if (rendAnual > 0 && dias > 0) {
+              const dailyRate = Math.pow(1 + rendAnual, 1 / 365) - 1;
+              periodReturn = (Math.pow(1 + dailyRate, dias) - 1) * 100;
+              tna = rendAnual * 100;
+            } else {
+              const movNetos = Number(last.movimientosNetos) - Number(first.movimientosNetos);
+              const firstVal = Number(first.valorCartera);
+              const lastVal = Number(last.valorCartera);
+              periodReturn = firstVal > 0 ? ((lastVal - firstVal - movNetos) / firstVal) * 100 : 0;
+              tna = dias > 0 ? (periodReturn / dias) * 365 : 0;
+            }
+            rendimiento = { tna, periodReturn, vcpInicial: Number(first.valorCartera), vcpFinal: Number(last.valorCartera), diasCalendario: dias };
+          }
+        } else if (asset === "wCOP") {
+          const snapshots = await prisma.wcopAccountSnapshot.findMany({
+            where: { fechaCorte: { gte: from, lte: to } },
+            orderBy: { fechaCorte: "asc" },
+          });
+          if (snapshots.length >= 2) {
+            const first = snapshots[0];
+            const last = snapshots[snapshots.length - 1];
+            const firstVal = Number(first.saldoFinal);
+            const lastVal = Number(last.saldoFinal);
+            // Exclude capital movements (deposits/withdrawals)
+            const depositsNet = (Number(last.depositosMM) - Number(first.depositosMM)) - (Number(last.retirosMM) - Number(first.retirosMM));
+            const periodReturn = firstVal > 0 ? ((lastVal - firstVal - depositsNet) / firstVal) * 100 : 0;
+            const dias = Math.round((last.fechaCorte.getTime() - first.fechaCorte.getTime()) / 86400000);
+            const tna = dias > 0 ? (periodReturn / dias) * 365 : 0;
+            rendimiento = { tna, periodReturn, vcpInicial: firstVal, vcpFinal: lastVal, diasCalendario: dias };
+          }
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   // 6. Pools from GeckoTerminal cache
