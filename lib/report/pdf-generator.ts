@@ -354,16 +354,28 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
 
       // Sample table (key dates)
       curY = checkPageBreak(doc, curY, 100);
-      doc.fontSize(7).fillColor(COLORS.textLight).text("Detalle de fechas clave:", 50, curY);
+      const hasLocation = data.coverageHistory.some((c) => c.location);
+      doc.fontSize(7).fillColor(COLORS.textLight).text(
+        hasLocation ? "Minteo vs Colateral — detalle por fecha:" : "Detalle de fechas clave:",
+        50, curY);
       curY += 12;
 
-      const covCols = [
-        { label: "Fecha", x: 50, w: 70 },
-        { label: `Colateral (${data.currencyCode})`, x: 120, w: 120 },
-        { label: "Supply", x: 240, w: 100 },
-        { label: "Ratio", x: 340, w: 60 },
-        { label: "Estado", x: 400, w: 60 },
-      ];
+      const covCols = hasLocation
+        ? [
+            { label: "Fecha", x: 50, w: 60 },
+            { label: "Supply (Minteo)", x: 110, w: 95 },
+            { label: `Colateral (${data.currencyCode})`, x: 205, w: 95 },
+            { label: "Ubicación", x: 300, w: 90 },
+            { label: "Ratio", x: 390, w: 45 },
+            { label: "Estado", x: 435, w: 50 },
+          ]
+        : [
+            { label: "Fecha", x: 50, w: 70 },
+            { label: `Colateral (${data.currencyCode})`, x: 120, w: 120 },
+            { label: "Supply", x: 240, w: 100 },
+            { label: "Ratio", x: 340, w: 60 },
+            { label: "Estado", x: 400, w: 60 },
+          ];
 
       doc.fontSize(6.5).fillColor(COLORS.textLight);
       for (const col of covCols) doc.text(col.label, col.x, curY, { width: col.w });
@@ -377,13 +389,24 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
       for (const c of covSampled) {
         curY = checkPageBreak(doc, curY, 13);
         const ok = c.ratio >= 100;
-        doc.fontSize(7).fillColor(COLORS.text)
-          .text(c.date.split("-").reverse().join("/"), covCols[0].x, curY, { width: covCols[0].w })
-          .text(`${data.currencySymbol} ${fmtNum(c.collateral, 0)}`, covCols[1].x, curY, { width: covCols[1].w })
-          .text(fmtNum(c.supply, 2), covCols[2].x, curY, { width: covCols[2].w })
-          .text(`${c.ratio.toFixed(2)}%`, covCols[3].x, curY, { width: covCols[3].w });
-        doc.fillColor(ok ? "#15803d" : "#b91c1c")
-          .text(ok ? "OK" : "DEFICIT", covCols[4].x, curY, { width: covCols[4].w });
+        if (hasLocation) {
+          doc.fontSize(7).fillColor(COLORS.text)
+            .text(c.date.split("-").reverse().join("/"), covCols[0].x, curY, { width: covCols[0].w })
+            .text(fmtNum(c.supply, 0), covCols[1].x, curY, { width: covCols[1].w })
+            .text(`${data.currencySymbol} ${fmtNum(c.collateral, 0)}`, covCols[2].x, curY, { width: covCols[2].w })
+            .text(c.location ?? "", covCols[3].x, curY, { width: covCols[3].w })
+            .text(`${c.ratio.toFixed(1)}%`, covCols[4].x, curY, { width: covCols[4].w });
+          doc.fillColor(ok ? "#15803d" : "#b91c1c")
+            .text(ok ? "OK" : "DEFICIT", covCols[5].x, curY, { width: covCols[5].w });
+        } else {
+          doc.fontSize(7).fillColor(COLORS.text)
+            .text(c.date.split("-").reverse().join("/"), covCols[0].x, curY, { width: covCols[0].w })
+            .text(`${data.currencySymbol} ${fmtNum(c.collateral, 0)}`, covCols[1].x, curY, { width: covCols[1].w })
+            .text(fmtNum(c.supply, 2), covCols[2].x, curY, { width: covCols[2].w })
+            .text(`${c.ratio.toFixed(2)}%`, covCols[3].x, curY, { width: covCols[3].w });
+          doc.fillColor(ok ? "#15803d" : "#b91c1c")
+            .text(ok ? "OK" : "DEFICIT", covCols[4].x, curY, { width: covCols[4].w });
+        }
         curY += 12;
       }
       curY += 10;

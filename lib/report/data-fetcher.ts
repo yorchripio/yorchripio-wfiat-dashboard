@@ -88,12 +88,30 @@ async function getCollateralAtDate(asset: AssetSymbol, atDate: Date): Promise<Co
       orderBy: { fechaCorte: "desc" },
     });
     if (!snap) return null;
-    // Collateral = capitalWcop (mint amount) + rendimientos (interest earned)
-    // NOT saldoFinal which includes MM funds. Bitso COP = MM funds, not collateral.
-    const val = Number(snap.capitalWcop) + Number(snap.rendimientos);
-    const instrumentos: { id: string; nombre: string; tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB"; entidad: string; valorTotal: number; porcentaje: number; rendimientoDiario: number; activo: boolean }[] = [
-      { id: "finandina", nombre: "Capital wCOP + Rendimientos (Finandina)", tipo: "Cuenta_Remunerada", entidad: "Banco Finandina", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true },
-    ];
+    const capWcop = Number(snap.capitalWcop);
+    const rend = Number(snap.rendimientos);
+    // Check if pre-transfer period (capitalWcop very low = collateral was in Bitso)
+    const bitso = await prisma.wcopBitsoBalance.findFirst({
+      where: { fecha: { lte: atDate } },
+      orderBy: { fecha: "desc" },
+    });
+    const bitsoVal = bitso ? Number(bitso.saldoCop) : 0;
+    type InstRow = { id: string; nombre: string; tipo: "FCI" | "Cuenta_Remunerada" | "A_la_Vista" | "CDB"; entidad: string; valorTotal: number; porcentaje: number; rendimientoDiario: number; activo: boolean };
+    let val: number;
+    let instrumentos: InstRow[];
+    if (capWcop < 1000000 && bitsoVal > capWcop) {
+      // Pre-transfer: collateral was in Bitso
+      val = bitsoVal;
+      instrumentos = [
+        { id: "bitso", nombre: "Saldo COP en Bitso (pre-transferencia)", tipo: "A_la_Vista", entidad: "Bitso", valorTotal: bitsoVal, porcentaje: 100, rendimientoDiario: 0, activo: true },
+      ];
+    } else {
+      // Normal: capitalWcop + rendimientos in Finandina
+      val = capWcop + rend;
+      instrumentos = [
+        { id: "finandina", nombre: "Capital wCOP + Rendimientos (Finandina)", tipo: "Cuenta_Remunerada", entidad: "Banco Finandina", valorTotal: val, porcentaje: 100, rendimientoDiario: 0, activo: true },
+      ];
+    }
     return {
       fecha: snap.fechaCorte.toISOString().slice(0, 10), total: val,
       instrumentos,
@@ -163,6 +181,7 @@ export interface CoverageRow {
   collateral: number;
   supply: number;
   ratio: number;
+  location?: string; // e.g. "Finandina" or "Bitso" — where the collateral sits
 }
 
 export interface CollateralBreakdownRow {
@@ -505,6 +524,7 @@ export async function getReportData(
   try {
     // Build collateral-by-date map depending on asset
     let collateralByDate = new Map<string, number>();
+    let collateralLocationByDate = new Map<string, string>();
 
     if (asset === "wARS") {
       // Per-type carry-forward: each instrument type is carried forward until
@@ -571,13 +591,42 @@ export async function getReportData(
     } else if (asset === "wCOP") {
       // Collateral = capitalWcop + rendimientos (Finandina only)
       // saldoFinal includes MM funds. Bitso COP = MM funds. Neither is collateral.
+      // Exception: before Jan 13, 2026 the collateral was in Bitso before transferring to Finandina.
       const snapshots = await prisma.wcopAccountSnapshot.findMany({
         where: { fechaCorte: { gte: from, lte: to } },
         orderBy: { fechaCorte: "asc" },
       });
+      // Get Bitso balances to show location for pre-transfer period
+      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
+        where: { fecha: { gte: from, lte: to } },
+        orderBy: { fecha: "asc" },
+      });
+      const bitsoMap = new Map<string, number>();
+      for (const b of bitsoBalances) {
+        bitsoMap.set(b.fecha.toISOString().slice(0, 10), Number(b.saldoCop));
+      }
       for (const s of snapshots) {
         const d = s.fechaCorte.toISOString().slice(0, 10);
-        collateralByDate.set(d, Number(s.capitalWcop) + Number(s.rendimientos));
+        const capWcop = Number(s.capitalWcop);
+        const rend = Number(s.rendimientos);
+        const bitsoVal = bitsoMap.get(d) ?? 0;
+        // Before the Bitso→Finandina transfer (Jan 13), collateral was in Bitso
+        // After: capitalWcop + rendimientos in Finandina
+        if (capWcop < 1000000 && bitsoVal > capWcop) {
+          // Pre-transfer: Bitso held the collateral
+          collateralByDate.set(d, bitsoVal);
+          collateralLocationByDate.set(d, "Bitso");
+        } else {
+          collateralByDate.set(d, capWcop + rend);
+          collateralLocationByDate.set(d, "Cuenta Ahorro Finandina");
+        }
+      }
+      // Add Bitso-only dates (Jan 1-7 before first Finandina snapshot)
+      for (const [d, bitso] of bitsoMap) {
+        if (!collateralByDate.has(d) && bitso > 1000000) {
+          collateralByDate.set(d, bitso);
+          collateralLocationByDate.set(d, "Bitso");
+        }
       }
     } else if (asset === "wCLP") {
       const snapshots = await prisma.wclpAccountSnapshot.findMany({
@@ -634,16 +683,20 @@ export async function getReportData(
     const fromStr = from.toISOString().slice(0, 10);
     let lastSupply = 0;
     let lastCollateral = 0;
+    let lastLocation = "";
 
     for (const d of sortedCovDates) {
       if (supplyMap.has(d)) lastSupply = supplyMap.get(d)!;
       if (collateralByDate.has(d)) lastCollateral = collateralByDate.get(d)!;
       if (d >= fromStr && d <= toStr && lastSupply > 0 && lastCollateral > 0) {
+        const loc = collateralLocationByDate.get(d) ?? lastLocation;
+        if (collateralLocationByDate.has(d)) lastLocation = loc;
         coverageHistory.push({
           date: d,
           collateral: lastCollateral,
           supply: lastSupply,
           ratio: (lastCollateral / lastSupply) * 100,
+          location: loc || undefined,
         });
       }
     }
