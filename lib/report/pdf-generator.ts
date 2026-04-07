@@ -384,11 +384,8 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         .moveTo(50, curY).lineTo(50 + contentW, curY).stroke();
       curY += 4;
 
-      // Sample rows: if has location (wCOP), show only first, last, and mint dates (supply changes)
-      // Otherwise, use the general sampling function
-      const covSampled = hasLocation
-        ? sampleMintRows(data.coverageHistory)
-        : sampleCoverageRows(data.coverageHistory, minCov.date);
+      // Show only: first date, last date, and dates where supply changed (mint/burn events)
+      const covSampled = sampleMintRows(data.coverageHistory);
       for (const c of covSampled) {
         curY = checkPageBreak(doc, curY, 13);
         const ok = c.ratio >= 100;
