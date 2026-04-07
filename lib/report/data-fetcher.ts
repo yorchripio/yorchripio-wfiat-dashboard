@@ -484,6 +484,26 @@ export async function getReportData(
     const supplyMap = new Map<string, number>();
     for (const s of supplyHistory) supplyMap.set(s.date, s.total);
 
+    // If no supply snapshots exist for the period, use the live supply total
+    // (already fetched in section 2) as a constant for all collateral dates.
+    // This ensures coverage history works for ALL assets, even those without
+    // historical supply snapshots (wCOP, wMXN, wPEN, wCLP).
+    const hasSupplyInRange = supplyHistory.some(
+      (s) => s.date >= from.toISOString().slice(0, 10) && s.date <= to.toISOString().slice(0, 10)
+    );
+    if (!hasSupplyInRange && supplyTotal > 0 && collateralByDate.size > 0) {
+      // Use the closest supply snapshot before the period end, or live total
+      const closestBefore = await prisma.supplySnapshot.findFirst({
+        where: { asset, snapshotAt: { lte: to } },
+        orderBy: { snapshotAt: "desc" },
+      });
+      const constantSupply = closestBefore ? Number(closestBefore.total) : supplyTotal;
+      // Add a synthetic entry for every collateral date
+      for (const d of collateralByDate.keys()) {
+        if (!supplyMap.has(d)) supplyMap.set(d, constantSupply);
+      }
+    }
+
     const allCovDates = new Set<string>();
     for (const d of collateralByDate.keys()) allCovDates.add(d);
     for (const d of supplyMap.keys()) allCovDates.add(d);

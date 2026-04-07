@@ -359,7 +359,7 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
 
       const covCols = [
         { label: "Fecha", x: 50, w: 70 },
-        { label: "Colateral (ARS)", x: 120, w: 120 },
+        { label: `Colateral (${data.currencyCode})`, x: 120, w: 120 },
         { label: "Supply", x: 240, w: 100 },
         { label: "Ratio", x: 340, w: 60 },
         { label: "Estado", x: 400, w: 60 },
@@ -379,7 +379,7 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         const ok = c.ratio >= 100;
         doc.fontSize(7).fillColor(COLORS.text)
           .text(c.date.split("-").reverse().join("/"), covCols[0].x, curY, { width: covCols[0].w })
-          .text(`$ ${fmtNum(c.collateral, 0)}`, covCols[1].x, curY, { width: covCols[1].w })
+          .text(`${data.currencySymbol} ${fmtNum(c.collateral, 0)}`, covCols[1].x, curY, { width: covCols[1].w })
           .text(fmtNum(c.supply, 2), covCols[2].x, curY, { width: covCols[2].w })
           .text(`${c.ratio.toFixed(2)}%`, covCols[3].x, curY, { width: covCols[3].w });
         doc.fillColor(ok ? "#15803d" : "#b91c1c")
