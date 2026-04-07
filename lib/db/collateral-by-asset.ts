@@ -62,66 +62,34 @@ export async function getWcopCollateralData(): Promise<ColateralData | null> {
   });
   if (!latest) return null;
 
-  const capitalWcop = Number(latest.capitalWcop);
+  const saldoFinal = Number(latest.saldoFinal);
   const rendimientos = Number(latest.rendimientos);
-  const colateralWC = capitalWcop + rendimientos;
+  const capitalWcop = Number(latest.capitalWcop);
 
-  let ethBaseCapital = 0;
-  let ethBaseInterest = 0;
-  const MINT_DATE = "2026-02-26";
-  try {
-    const supplyData = await getTotalSupply("wCOP");
-    const ethSupply = supplyData.chains.ethereum.success ? supplyData.chains.ethereum.supply : 0;
-    const baseSupply = supplyData.chains.base.success ? supplyData.chains.base.supply : 0;
-    ethBaseCapital = ethSupply + baseSupply;
-
-    if (ethBaseCapital > 0) {
-      const tna = 0.0913;
-      const dailyRate = Math.pow(1 + tna, 1 / 365) - 1;
-      const today = new Date().toISOString().slice(0, 10);
-      const daysSinceMint = Math.max(0, Math.round(
-        (new Date(today + "T00:00:00Z").getTime() - new Date(MINT_DATE + "T00:00:00Z").getTime()) / 86400000
-      ));
-      ethBaseInterest = ethBaseCapital * (Math.pow(1 + dailyRate, daysSinceMint) - 1);
-    }
-  } catch (err) {
-    console.error("[wCOP collateral] Error fetching ETH+Base supply:", err);
-  }
-
-  const colateralTotal = colateralWC + ethBaseCapital + ethBaseInterest;
-  const rendDiario = capitalWcop > 0 ? ((rendimientos / capitalWcop) / 30) * 100 : 0;
-
-  const instrumentos = [
-    {
-      id: "cuenta-ahorro-finandina",
-      nombre: "Cuenta de Ahorro (World Chain)",
-      tipo: "Cuenta_Remunerada" as const,
-      entidad: "Banco Finandina",
-      valorTotal: colateralWC,
-      porcentaje: colateralTotal > 0 ? (colateralWC / colateralTotal) * 100 : 100,
-      rendimientoDiario: rendDiario,
-      activo: true,
-    },
-  ];
-
-  if (ethBaseCapital > 0) {
-    instrumentos.push({
-      id: "finandina-eth-base",
-      nombre: "Cuenta de Ahorro (ETH+Base)",
-      tipo: "Cuenta_Remunerada" as const,
-      entidad: "Banco Finandina",
-      valorTotal: ethBaseCapital + ethBaseInterest,
-      porcentaje: colateralTotal > 0 ? ((ethBaseCapital + ethBaseInterest) / colateralTotal) * 100 : 0,
-      rendimientoDiario: rendDiario,
-      activo: true,
-    });
-  }
+  // Rendimiento diario: use actual period days from snapshot
+  const periodoInicio = latest.periodoInicio;
+  const periodoFin = latest.periodoFin;
+  const diasPeriodo = Math.max(1, Math.round(
+    (periodoFin.getTime() - periodoInicio.getTime()) / 86400000
+  ));
+  const rendDiario = capitalWcop > 0 ? ((rendimientos / capitalWcop) / diasPeriodo) * 100 : 0;
 
   return {
     fecha: latest.fechaCorte.toISOString().slice(0, 10),
-    instrumentos,
-    total: colateralTotal,
-    totalFormatted: `$ ${Math.round(colateralTotal).toLocaleString("es-CO", { minimumFractionDigits: 0 })}`,
+    instrumentos: [
+      {
+        id: "cuenta-ahorro-finandina",
+        nombre: "Cuenta de Ahorro Finandina",
+        tipo: "Cuenta_Remunerada" as const,
+        entidad: "Banco Finandina",
+        valorTotal: saldoFinal,
+        porcentaje: 100,
+        rendimientoDiario: rendDiario,
+        activo: true,
+      },
+    ],
+    total: saldoFinal,
+    totalFormatted: `$ ${Math.round(saldoFinal).toLocaleString("es-CO", { minimumFractionDigits: 0 })}`,
     timestamp: new Date().toISOString(),
     rendimientoCartera: rendDiario,
   };
