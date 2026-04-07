@@ -616,18 +616,16 @@ function checkPageBreak(doc: InstanceType<typeof import("pdfkit")>, curY: number
 
 import { type CoverageRow, type PositionSnapshotRow } from "./data-fetcher";
 
-/** Pick only: first date, last date, and dates where supply changed (mint events) */
+/** Pick only: first date, last date, and dates where supply changed (mint/burn events) */
 function sampleMintRows(rows: CoverageRow[]): CoverageRow[] {
   if (rows.length <= 3) return rows;
   const sampled = new Map<string, CoverageRow>();
   // Always first and last
   sampled.set(rows[0].date, rows[0]);
   sampled.set(rows[rows.length - 1].date, rows[rows.length - 1]);
-  // Dates where supply changed (mint/burn events)
+  // Only the date where supply actually changed (not the day before)
   for (let i = 1; i < rows.length; i++) {
     if (Math.abs(rows[i].supply - rows[i - 1].supply) > 1) {
-      // Include the day before (last with old supply) and the day of change
-      sampled.set(rows[i - 1].date, rows[i - 1]);
       sampled.set(rows[i].date, rows[i]);
     }
   }
