@@ -158,7 +158,7 @@ export const CHAINS = {
     id: 137,
     name: "Polygon",
     rpcUrl: polygonRpcUrls[0] ?? "https://polygon.drpc.org",
-    rpcUrls: polygonRpcUrls.length > 0 ? polygonRpcUrls : ["https://polygon.drpc.org", "https://polygon-rpc.com"],
+    rpcUrls: polygonRpcUrls.length > 0 ? polygonRpcUrls : ["https://polygon.drpc.org", "https://polygon-bor-rpc.publicnode.com"],
     explorerUrl: "https://polygonscan.com",
     color: "#8247E5",
   },
