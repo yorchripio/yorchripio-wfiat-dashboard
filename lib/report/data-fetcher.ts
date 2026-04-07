@@ -148,15 +148,44 @@ export async function getReportData(
     console.error(`[report] Error getting collateral for ${asset}:`, err);
   }
 
-  // 2. Supply
+  // 2. Supply — use snapshot at end of report period if available, otherwise live
   let supplyTotal = 0;
   const supplyByChain: SupplyByChain[] = [];
   try {
-    const supply = await getTotalSupply(asset);
-    supplyTotal = supply.total;
-    for (const [chain, data] of Object.entries(supply.chains)) {
-      if (data.success && data.supply > 0) {
-        supplyByChain.push({ chain, supply: data.supply });
+    // Try to get the snapshot closest to the report end date (within range)
+    const endSnapshot = await prisma.supplySnapshot.findFirst({
+      where: { asset, snapshotAt: { lte: to } },
+      orderBy: { snapshotAt: "desc" },
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const toStr = to.toISOString().slice(0, 10);
+    const isCurrentPeriod = toStr >= today;
+
+    if (!isCurrentPeriod && endSnapshot) {
+      // Historical report: use the snapshot total and chain breakdown from snapshot JSON
+      supplyTotal = Number(endSnapshot.total);
+      // Try to extract chain breakdown from snapshot
+      const chainsJson = endSnapshot.chainsJson as Record<string, { supply: number; success: boolean }> | null;
+      if (chainsJson) {
+        for (const [chain, data] of Object.entries(chainsJson)) {
+          if (data.success && data.supply > 0) {
+            supplyByChain.push({ chain, supply: data.supply });
+          }
+        }
+      }
+      // If no chain breakdown in snapshot, just show total
+      if (supplyByChain.length === 0 && supplyTotal > 0) {
+        supplyByChain.push({ chain: "total", supply: supplyTotal });
+      }
+    } else {
+      // Current period or no snapshot: use live on-chain data
+      const supply = await getTotalSupply(asset);
+      supplyTotal = supply.total;
+      for (const [chain, data] of Object.entries(supply.chains)) {
+        if (data.success && data.supply > 0) {
+          supplyByChain.push({ chain, supply: data.supply });
+        }
       }
     }
   } catch (err) {
