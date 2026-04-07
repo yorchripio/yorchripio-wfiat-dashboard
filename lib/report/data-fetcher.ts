@@ -750,14 +750,29 @@ export async function getReportData(
         where: { fechaCorte: { gte: from, lte: to } },
         orderBy: { fechaCorte: "asc" },
       });
+      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
+        where: { fecha: { gte: from, lte: to } },
+        orderBy: { fecha: "asc" },
+      });
+      const bitsoMap = new Map<string, number>();
+      for (const b of bitsoBalances) {
+        bitsoMap.set(b.fecha.toISOString().slice(0, 10), Number(b.saldoCop));
+      }
+      let lastBitso = 0;
       for (const s of snapshots) {
+        const d = s.fechaCorte.toISOString().slice(0, 10);
+        if (bitsoMap.has(d)) lastBitso = bitsoMap.get(d)!;
+        const finandina = Number(s.saldoFinal);
+        const items: { tipo: string; nombre: string; valor: number }[] = [
+          { tipo: "Cuenta_Remunerada", nombre: `Cuenta Ahorro Finandina`, valor: finandina },
+        ];
+        if (lastBitso > 0) {
+          items.push({ tipo: "A_la_Vista", nombre: `Saldo COP en Bitso`, valor: lastBitso });
+        }
         collateralBreakdown.push({
-          date: s.fechaCorte.toISOString().slice(0, 10),
-          items: [
-            { tipo: "Cuenta_Remunerada", nombre: `Capital wCOP`, valor: Number(s.capitalWcop) },
-            { tipo: "Rendimiento", nombre: `Rendimientos acumulados`, valor: Number(s.rendimientos) },
-          ],
-          total: Number(s.saldoFinal),
+          date: d,
+          items,
+          total: finandina + lastBitso,
         });
       }
     } else if (asset === "wCLP") {
@@ -841,6 +856,22 @@ export async function getReportData(
           valor: Number(s.saldoFinal),
           extra: `Capital wCOP: $${Number(s.capitalWcop).toLocaleString("es-CO")} | Rendimientos: $${Number(s.rendimientos).toLocaleString("es-CO")} | Retiros MM: $${Number(s.retirosMM).toLocaleString("es-CO")} | Depósitos MM: $${Number(s.depositosMM).toLocaleString("es-CO")} | Impuestos: $${Number(s.impuestos).toLocaleString("es-CO")}`,
         });
+      }
+      // Add Bitso balance entries
+      const bitsoBalances = await prisma.wcopBitsoBalance.findMany({
+        where: { fecha: { gte: from, lte: to } },
+        orderBy: { fecha: "asc" },
+      });
+      for (const b of bitsoBalances) {
+        const bal = Number(b.saldoCop);
+        if (bal > 0) {
+          positionHistory.push({
+            date: b.fecha.toISOString().slice(0, 10),
+            detail: "Saldo COP en Bitso",
+            valor: bal,
+            extra: `Fuente: ${b.source}`,
+          });
+        }
       }
     } catch { /* ignore */ }
   } else if (asset === "wCLP") {
