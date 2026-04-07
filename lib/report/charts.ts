@@ -50,19 +50,21 @@ export function drawPieChart(
   }
 
   // Legend below chart
-  const legendY = cy + radius + 15;
-  const legendX = cx - radius;
-  const lineHeight = 14;
+  const legendY = cy + radius + 12;
+  const legendX = cx - radius - 20;
+  const lineHeight = 12;
+  const legendW = radius * 2 + 40;
 
   for (let i = 0; i < data.length; i++) {
     const item = data[i];
     const y = legendY + i * lineHeight;
     doc.save();
-    doc.rect(legendX, y, 8, 8).fill(item.color);
+    doc.rect(legendX, y + 1, 7, 7).fill(item.color);
     doc.fillColor("#333333")
-      .fontSize(8)
-      .text(`${item.label} (${item.value.toFixed(1)}%)`, legendX + 12, y - 1, {
-        width: radius * 2 - 12,
+      .fontSize(6.5)
+      .text(`${item.label} (${item.value.toFixed(1)}%)`, legendX + 10, y, {
+        width: legendW - 10,
+        lineBreak: false,
       });
     doc.restore();
   }

@@ -81,20 +81,24 @@ export async function generateReport(data: ReportData): Promise<Buffer> {
         .text(`Actualizado: ${data.collateral.fecha}`, 50, curY);
       curY += 20;
 
-      // Instruments table
+      // Instruments table + Pie chart side by side
       if (data.collateral.instrumentos.length > 0) {
-        curY = drawInstrumentTable(doc, data.collateral.instrumentos, curY, data.currencySymbol);
-        curY += 10;
+        const tableEndY = drawInstrumentTable(doc, data.collateral.instrumentos, curY, data.currencySymbol);
 
-        // Pie chart (right side)
+        // Pie chart to the right of the table
         const pieData = data.collateral.instrumentos.map((inst, i) => ({
-          label: inst.nombre.slice(0, 30),
+          label: inst.nombre.slice(0, 25),
           value: inst.porcentaje,
           color: PIE_COLORS[i % PIE_COLORS.length],
         }));
         if (pieData.length > 1) {
-          drawPieChart(doc, pieData, pageW - 130, curY - 60, 50, 20);
+          const pieRadius = 45;
+          const pieCx = pageW - 95;
+          const pieCy = curY + 25;
+          drawPieChart(doc, pieData, pieCx, pieCy, pieRadius, 18);
         }
+
+        curY = tableEndY + 10;
       }
     } else {
       doc.fontSize(10).fillColor(COLORS.textLight)
@@ -631,11 +635,10 @@ function drawInstrumentTable(
   currencySymbol: string
 ): number {
   const cols = [
-    { label: "Instrumento", x: 50, w: 160 },
-    { label: "Entidad", x: 210, w: 80 },
-    { label: "Valor", x: 290, w: 100 },
-    { label: "%", x: 390, w: 40 },
-    { label: "Rend. diario", x: 430, w: 65 },
+    { label: "Instrumento", x: 50, w: 155 },
+    { label: "Entidad", x: 205, w: 75 },
+    { label: "Valor", x: 280, w: 100 },
+    { label: "%", x: 380, w: 40 },
   ];
 
   let y = startY;
@@ -647,20 +650,16 @@ function drawInstrumentTable(
   }
   y += 12;
   doc.strokeColor(COLORS.medGray).lineWidth(0.5)
-    .moveTo(50, y).lineTo(495, y).stroke();
+    .moveTo(50, y).lineTo(420, y).stroke();
   y += 5;
 
   // Rows
   doc.fontSize(8).fillColor(COLORS.text);
   for (const inst of instrumentos) {
-    doc.text(inst.nombre.slice(0, 35), cols[0].x, y, { width: cols[0].w });
+    doc.text(inst.nombre.slice(0, 30), cols[0].x, y, { width: cols[0].w });
     doc.text(inst.entidad, cols[1].x, y, { width: cols[1].w });
     doc.text(`${currencySymbol} ${fmtNum(inst.valorTotal, 2)}`, cols[2].x, y, { width: cols[2].w });
     doc.text(`${inst.porcentaje.toFixed(1)}%`, cols[3].x, y, { width: cols[3].w });
-    doc.text(
-      inst.rendimientoDiario > 0 ? `${inst.rendimientoDiario.toFixed(4)}%` : "-",
-      cols[4].x, y, { width: cols[4].w }
-    );
     y += 16;
   }
 
