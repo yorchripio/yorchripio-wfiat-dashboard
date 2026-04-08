@@ -400,10 +400,22 @@ export async function getReportData(
       try {
         if (asset === "wBRL") {
           // Compare total CDB value between first and last date in period
-          const positions = await prisma.wbrlCdbPosition.findMany({
+          // Include closest position before range start for proper period calculation
+          const beforeRange = await prisma.wbrlCdbPosition.findMany({
+            where: { esColateral: true, fechaPosicao: { lt: from } },
+            orderBy: { fechaPosicao: "desc" },
+          });
+          const inRangePos = await prisma.wbrlCdbPosition.findMany({
             where: { esColateral: true, fechaPosicao: { gte: from, lte: to } },
             orderBy: { fechaPosicao: "asc" },
           });
+          // Add the latest pre-range positions (group by date, take only the latest date)
+          const positions = [...inRangePos];
+          if (beforeRange.length > 0) {
+            const latestPreDate = beforeRange[0].fechaPosicao.toISOString().slice(0, 10);
+            const latestPre = beforeRange.filter(p => p.fechaPosicao.toISOString().slice(0, 10) === latestPreDate);
+            positions.unshift(...latestPre);
+          }
           if (positions.length > 0) {
             const byDate = new Map<string, number>();
             for (const p of positions) {
@@ -421,10 +433,16 @@ export async function getReportData(
             }
           }
         } else if (asset === "wMXN") {
-          const fundPositions = await prisma.wmxnFundPosition.findMany({
+          // Get positions in range + closest before range start for proper period calc
+          const firstBefore = await prisma.wmxnFundPosition.findFirst({
+            where: { fechaReporte: { lt: from } },
+            orderBy: { fechaReporte: "desc" },
+          });
+          const inRange = await prisma.wmxnFundPosition.findMany({
             where: { fechaReporte: { gte: from, lte: to } },
             orderBy: { fechaReporte: "asc" },
           });
+          const fundPositions = firstBefore ? [firstBefore, ...inRange] : inRange;
           if (fundPositions.length >= 2) {
             const first = fundPositions[0];
             const last = fundPositions[fundPositions.length - 1];
@@ -586,6 +604,17 @@ export async function getReportData(
       }
     } else if (asset === "wBRL") {
       // CDB positions grouped by fechaPosicao
+      // Include closest positions before range for carry-forward
+      const preBrl = await prisma.wbrlCdbPosition.findMany({
+        where: { esColateral: true, fechaPosicao: { lt: from } },
+        orderBy: { fechaPosicao: "desc" },
+      });
+      if (preBrl.length > 0) {
+        const latestD = preBrl[0].fechaPosicao.toISOString().slice(0, 10);
+        const latestGroup = preBrl.filter(p => p.fechaPosicao.toISOString().slice(0, 10) === latestD);
+        const total = latestGroup.reduce((s, p) => s + Number(p.valorBruto), 0);
+        collateralByDate.set(latestD, total);
+      }
       const positions = await prisma.wbrlCdbPosition.findMany({
         where: { esColateral: true, fechaPosicao: { gte: from, lte: to } },
         orderBy: { fechaPosicao: "asc" },
@@ -595,6 +624,12 @@ export async function getReportData(
         collateralByDate.set(d, (collateralByDate.get(d) ?? 0) + Number(p.valorBruto));
       }
     } else if (asset === "wMXN") {
+      // Include closest position before range for carry-forward
+      const preMxn = await prisma.wmxnFundPosition.findFirst({
+        where: { fechaReporte: { lt: from } },
+        orderBy: { fechaReporte: "desc" },
+      });
+      if (preMxn) collateralByDate.set(preMxn.fechaReporte.toISOString().slice(0, 10), Number(preMxn.valorCartera));
       const fundPositions = await prisma.wmxnFundPosition.findMany({
         where: { fechaReporte: { gte: from, lte: to } },
         orderBy: { fechaReporte: "asc" },
