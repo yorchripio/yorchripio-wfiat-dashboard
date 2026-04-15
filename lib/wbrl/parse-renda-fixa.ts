@@ -1,15 +1,9 @@
 // lib/wbrl/parse-renda-fixa.ts
 // Parsea el PDF de "Posição Renda Fixa" de Banco Genial y extrae posiciones CDB.
-// Uses pdfjs-dist legacy build directly (no workers needed for server-side).
-
-import path from "path";
-import { pathToFileURL } from "url";
+// Uses pdfjs-dist legacy build directly on the server.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const pdfjsLib: any = require("pdfjs-dist/legacy/build/pdf.mjs");
-// Point worker to the actual file using file:// URL (required on Windows/Node.js ESM)
-const workerPath = path.join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
-pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
 
 export interface CdbPosition {
   fechaPosicao: string;   // YYYY-MM-DD

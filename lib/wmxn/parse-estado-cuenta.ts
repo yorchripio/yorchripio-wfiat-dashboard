@@ -4,13 +4,8 @@
 // Uses full-text search with targeted patterns (not line-by-line) to handle
 // varying PDF text extraction layouts from pdfjs-dist.
 
-import path from "path";
-import { pathToFileURL } from "url";
-
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const pdfjsLib: any = require("pdfjs-dist/legacy/build/pdf.mjs");
-const workerPath = path.join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
-pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
 
 export interface WmxnParsedPosition {
   periodoInicio: string;     // YYYY-MM-DD
