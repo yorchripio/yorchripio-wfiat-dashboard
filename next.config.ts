@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(process.cwd()),
   },
-  serverExternalPackages: ["pdfkit"],
+  serverExternalPackages: ["pdfkit", "@napi-rs/canvas"],
 };
 
 export default nextConfig;

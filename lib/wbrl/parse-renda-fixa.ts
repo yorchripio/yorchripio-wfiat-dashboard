@@ -2,6 +2,8 @@
 // Parsea el PDF de "Posição Renda Fixa" de Banco Genial y extrae posiciones CDB.
 // Uses pdfjs-dist legacy build directly on the server.
 
+import "@/lib/pdfjs-node-polyfills";
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const pdfjsLib: any = require("pdfjs-dist/legacy/build/pdf.mjs");
 
