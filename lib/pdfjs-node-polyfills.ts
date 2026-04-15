@@ -9,11 +9,7 @@ const canvas = require("@napi-rs/canvas") as {
   Path2D?: unknown;
 };
 
-const globals = globalThis as typeof globalThis & {
-  DOMMatrix?: unknown;
-  ImageData?: unknown;
-  Path2D?: unknown;
-};
+const globals = globalThis as Record<string, unknown>;
 
 if (!globals.DOMMatrix && canvas.DOMMatrix) {
   globals.DOMMatrix = canvas.DOMMatrix;
