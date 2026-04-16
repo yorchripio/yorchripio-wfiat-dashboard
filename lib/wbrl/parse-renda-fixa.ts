@@ -3,9 +3,15 @@
 // Uses pdfjs-dist legacy build directly on the server.
 
 import "@/lib/pdfjs-node-polyfills";
+import { pathToFileURL } from "node:url";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const pdfjsLib: any = require("pdfjs-dist/legacy/build/pdf.mjs");
+// Point the fake worker to the real installed module rather than a bundled chunk path.
+pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")
+).href;
 
 export interface CdbPosition {
   fechaPosicao: string;   // YYYY-MM-DD
