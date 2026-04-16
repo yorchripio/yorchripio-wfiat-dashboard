@@ -5,13 +5,14 @@
 // varying PDF text extraction layouts from pdfjs-dist.
 
 import "@/lib/pdfjs-node-polyfills";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
+const requireForPdfjs = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const pdfjsLib: any = require("pdfjs-dist/legacy/build/pdf.mjs");
+const pdfjsLib: any = requireForPdfjs("pdfjs-dist/legacy/build/pdf.mjs");
 pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")
+  requireForPdfjs.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")
 ).href;
 
 export interface WmxnParsedPosition {
