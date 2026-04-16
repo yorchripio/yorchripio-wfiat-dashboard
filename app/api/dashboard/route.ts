@@ -197,7 +197,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ]);
 
     if (!supplyData.allSuccessful) {
-      const failed = (["ethereum", "worldchain", "base"] as const).filter(
+      const failed = (["ethereum", "worldchain"] as const).filter(
         (chain) => !supplyData.chains[chain].success
       );
       return NextResponse.json(
@@ -207,6 +207,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         },
         { status: 503 }
       );
+    }
+
+    for (const opt of ["base", "gnosis", "polygon", "bsc"] as const) {
+      if (!supplyData.chains[opt].success) {
+        console.warn(`[dashboard] ${asset} ${opt} falló, devolviendo total parcial sin ${opt}`);
+      }
     }
 
     if (!collateralData) {

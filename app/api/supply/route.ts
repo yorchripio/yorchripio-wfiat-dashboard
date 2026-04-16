@@ -15,9 +15,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const asset = (request.nextUrl.searchParams.get("asset") || "wARS") as AssetSymbol;
     const supplyData = await getTotalSupply(asset);
 
-    // Only fail if a CORE chain (ethereum, worldchain, base) fails.
-    // Gnosis is optional — if it fails we still return partial data.
-    const coreChains = ["ethereum", "worldchain", "base"] as const;
+    // Only fail if a CORE chain (ethereum, worldchain) fails.
+    // Base, Gnosis, Polygon y BSC son opcionales.
+    const coreChains = ["ethereum", "worldchain"] as const;
     const coreFailed = coreChains.filter((c) => !supplyData.chains[c].success);
     if (coreFailed.length > 0) {
       return NextResponse.json(
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    for (const opt of ["gnosis", "polygon", "bsc"] as const) {
+    for (const opt of ["base", "gnosis", "polygon", "bsc"] as const) {
       if (!supplyData.chains[opt].success) {
         console.warn(`[API /supply] ${opt} falló, devolviendo supply sin ${opt}`);
       }

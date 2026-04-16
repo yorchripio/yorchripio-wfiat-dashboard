@@ -45,7 +45,9 @@ function parseBrDate(s: string): string {
 
 async function extractTextLines(data: Uint8Array): Promise<string[]> {
   const pdfjsLib = await getPdfJs();
-  const loadingTask = pdfjsLib.getDocument({ data });
+  const loadingTask = pdfjsLib.getDocument(
+    { data, disableWorker: true } as unknown as Parameters<typeof pdfjsLib.getDocument>[0]
+  );
   const pdf = await loadingTask.promise;
 
   const allLines: string[] = [];

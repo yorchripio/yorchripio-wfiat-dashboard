@@ -20,24 +20,24 @@ export async function takeSupplyAndCollateralSnapshots(): Promise<void> {
     try {
       const supplyData = await getTotalSupply(asset);
       if (!supplyData.allSuccessful) {
-        const coreFailed = (["ethereum", "worldchain", "base"] as const).filter(
+        const coreFailed = (["ethereum", "worldchain"] as const).filter(
           (c) => !supplyData.chains[c].success
         );
         if (coreFailed.length > 0) {
           console.warn(`[cron/snapshot] ${asset} supply incompleto, fallaron: ${coreFailed.join(", ")}`);
           continue;
         }
-        // Optional chains — warn but don't skip
-        for (const opt of ["gnosis", "polygon", "bsc"] as const) {
-          if (!supplyData.chains[opt].success) {
-            console.warn(`[cron/snapshot] ${asset} ${opt} falló, guardando sin ${opt}`);
-          }
+      }
+      // Optional chains — warn but don't skip
+      for (const opt of ["base", "gnosis", "polygon", "bsc"] as const) {
+        if (!supplyData.chains[opt].success) {
+          console.warn(`[cron/snapshot] ${asset} ${opt} falló, guardando sin ${opt}`);
         }
       }
 
       const chainsData: Record<string, { supply: number; success: boolean } | string> = { source: "cron" };
       for (const c of ["ethereum", "worldchain", "base", "gnosis", "polygon", "bsc"] as const) {
-        chainsData[c] = { supply: supplyData.chains[c].supply, success: true };
+        chainsData[c] = { supply: supplyData.chains[c].supply, success: supplyData.chains[c].success };
       }
 
       const snapshotId = `cron-${asset}-${dateKey}`;

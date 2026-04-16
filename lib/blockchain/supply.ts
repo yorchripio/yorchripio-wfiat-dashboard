@@ -168,7 +168,7 @@ export async function getTotalSupply(asset: AssetSymbol = "wARS"): Promise<Total
       maximumFractionDigits: 0,
     }),
     timestamp: new Date().toISOString(),
-    allSuccessful: (["ethereum", "worldchain", "base"] as const).every((name) => byName[name].success),
+    allSuccessful: (["ethereum", "worldchain"] as const).every((name) => byName[name].success),
   };
 }
 

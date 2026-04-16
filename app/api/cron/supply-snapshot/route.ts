@@ -46,7 +46,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const supplyData = await getTotalSupply(asset);
 
         if (!supplyData.allSuccessful) {
-          const coreFailed = (["ethereum", "worldchain", "base"] as const).filter(
+          const coreFailed = (["ethereum", "worldchain"] as const).filter(
             (c) => !supplyData.chains[c].success
           );
           if (coreFailed.length > 0) {
@@ -54,13 +54,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             results[asset] = { total: 0, success: false, error: `Fallaron: ${coreFailed.join(", ")}` };
             continue;
           }
-          if (!supplyData.chains.gnosis.success) {
-            console.warn(`[cron/supply-snapshot] ${asset} Gnosis falló, guardando sin Gnosis`);
+          for (const opt of ["base", "gnosis", "polygon", "bsc"] as const) {
+            if (!supplyData.chains[opt].success) {
+              console.warn(`[cron/supply-snapshot] ${asset} ${opt} falló, guardando sin ${opt}`);
+            }
           }
         }
 
         const chainsData: Record<string, { supply: number; success: boolean } | string> = { source: "cron" };
-        for (const c of ["ethereum", "worldchain", "base", "gnosis"] as const) {
+        for (const c of ["ethereum", "worldchain", "base", "gnosis", "polygon", "bsc"] as const) {
           chainsData[c] = { supply: supplyData.chains[c].supply, success: supplyData.chains[c].success };
         }
 
