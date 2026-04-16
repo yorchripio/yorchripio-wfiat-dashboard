@@ -78,6 +78,26 @@ function formatDate(s: string): string {
   return `${d}/${m}/${y}`;
 }
 
+async function parseJsonSafe(res: Response): Promise<{
+  json: Record<string, unknown> | null;
+  contentType: string;
+}> {
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const text = await res.text();
+  if (!text) {
+    return { json: null, contentType };
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object") {
+      return { json: parsed as Record<string, unknown>, contentType };
+    }
+  } catch {
+    // fallback handled by caller
+  }
+  return { json: null, contentType };
+}
+
 export function WbrlDataSection({ onConfirmed }: { onConfirmed?: () => void }): React.ReactElement {
   const [sectionOpen, setSectionOpen] = useState(false);
 
@@ -139,13 +159,29 @@ export function WbrlDataSection({ onConfirmed }: { onConfirmed?: () => void }): 
       if (extratoFile) formData.append("extrato", extratoFile);
 
       const res = await fetch("/api/wbrl/upload", { method: "POST", body: formData });
-      const json = await res.json();
+      const { json, contentType } = await parseJsonSafe(res);
+
+      if (!json) {
+        if (contentType.includes("text/html")) {
+          setUploadError(
+            "El servidor devolvió HTML en vez de JSON. Suele ser un error interno o archivo demasiado grande para Vercel."
+          );
+        } else {
+          setUploadError(`Respuesta inválida del servidor (HTTP ${res.status}).`);
+        }
+        return;
+      }
 
       if (json.success) {
-        setPreviewPositions(json.data.positions);
-        setPreviewMovimientos(json.data.movimientos);
+        const data = (json.data ?? {}) as {
+          positions?: CdbPositionPreview[];
+          movimientos?: ExtratoMovimiento[];
+        };
+        setPreviewPositions(data.positions ?? []);
+        setPreviewMovimientos(data.movimientos ?? []);
       } else {
-        setUploadError(json.error || "Error procesando archivos");
+        const errorMsg = typeof json.error === "string" ? json.error : "Error procesando archivos";
+        setUploadError(errorMsg);
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Error de conexión");
@@ -174,11 +210,16 @@ export function WbrlDataSection({ onConfirmed }: { onConfirmed?: () => void }): 
           movimientos: previewMovimientos,
         }),
       });
-      const json = await res.json();
-      if (json.success) {
+      const { json } = await parseJsonSafe(res);
+      if (json?.success) {
+        const data = (json.data ?? {}) as {
+          positionsCreated?: number;
+          colateral?: number;
+          noColateral?: number;
+        };
         setConfirmResult({
           success: true,
-          message: `Guardadas ${json.data.positionsCreated} posiciones (${json.data.colateral} colateral, ${json.data.noColateral} no-colateral).`,
+          message: `Guardadas ${data.positionsCreated ?? 0} posiciones (${data.colateral ?? 0} colateral, ${data.noColateral ?? 0} no-colateral).`,
         });
         setPreviewPositions(null);
         setPreviewMovimientos([]);
@@ -187,7 +228,11 @@ export function WbrlDataSection({ onConfirmed }: { onConfirmed?: () => void }): 
         fetchSavedPositions();
         onConfirmed?.();
       } else {
-        setConfirmResult({ success: false, message: json.error || "Error guardando" });
+        const errorMsg =
+          json && typeof json.error === "string"
+            ? json.error
+            : `Error guardando (HTTP ${res.status})`;
+        setConfirmResult({ success: false, message: errorMsg });
       }
     } catch (err) {
       setConfirmResult({ success: false, message: err instanceof Error ? err.message : "Error" });
@@ -204,15 +249,26 @@ export function WbrlDataSection({ onConfirmed }: { onConfirmed?: () => void }): 
       const formData = new FormData();
       formData.append("file", balanceFile);
       const res = await fetch("/api/wbrl/import-balance", { method: "POST", body: formData });
-      const json = await res.json();
-      if (json.success) {
+      const { json } = await parseJsonSafe(res);
+      if (json?.success) {
+        const data = (json.data ?? {}) as {
+          totalRows?: number;
+          created?: number;
+          updated?: number;
+          dateRange?: { from?: string; to?: string };
+          latestCirculante?: number;
+        };
         setBalanceResult({
           success: true,
-          message: `Importados ${json.data.totalRows} snapshots (${json.data.created} nuevos, ${json.data.updated} actualizados). Rango: ${json.data.dateRange.from} a ${json.data.dateRange.to}. Circulante actual: R$ ${json.data.latestCirculante?.toLocaleString("pt-BR")}`,
+          message: `Importados ${data.totalRows ?? 0} snapshots (${data.created ?? 0} nuevos, ${data.updated ?? 0} actualizados). Rango: ${data.dateRange?.from ?? "-"} a ${data.dateRange?.to ?? "-"}. Circulante actual: R$ ${data.latestCirculante?.toLocaleString("pt-BR") ?? "0"}`,
         });
         setBalanceFile(null);
       } else {
-        setBalanceResult({ success: false, message: json.error || "Error importando" });
+        const errorMsg =
+          json && typeof json.error === "string"
+            ? json.error
+            : `Error importando (HTTP ${res.status})`;
+        setBalanceResult({ success: false, message: errorMsg });
       }
     } catch (err) {
       setBalanceResult({ success: false, message: err instanceof Error ? err.message : "Error" });

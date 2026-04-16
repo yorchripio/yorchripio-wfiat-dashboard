@@ -3,19 +3,15 @@
 // Uses pdfjs-dist legacy build directly on the server.
 
 import "@/lib/pdfjs-node-polyfills";
-import { pathToFileURL } from "node:url";
 
-const runtimeRequire = process
-  .getBuiltinModule("module")
-  .createRequire(import.meta.url);
-const pdfjsModulePath = ["pdfjs-dist", "legacy", "build", "pdf.mjs"].join("/");
-const pdfjsWorkerModulePath = ["pdfjs-dist", "legacy", "build", "pdf.worker.mjs"].join("/");
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const pdfjsLib: any = runtimeRequire(pdfjsModulePath);
-// Point the fake worker to the real installed module rather than a bundled chunk path.
-pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
-  runtimeRequire.resolve(pdfjsWorkerModulePath)
-).href;
+let pdfjsImportPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null = null;
+
+async function getPdfJs() {
+  if (!pdfjsImportPromise) {
+    pdfjsImportPromise = import("pdfjs-dist/legacy/build/pdf.mjs");
+  }
+  return pdfjsImportPromise;
+}
 
 export interface CdbPosition {
   fechaPosicao: string;   // YYYY-MM-DD
@@ -48,6 +44,7 @@ function parseBrDate(s: string): string {
 }
 
 async function extractTextLines(data: Uint8Array): Promise<string[]> {
+  const pdfjsLib = await getPdfJs();
   const loadingTask = pdfjsLib.getDocument({ data });
   const pdf = await loadingTask.promise;
 
@@ -58,7 +55,6 @@ async function extractTextLines(data: Uint8Array): Promise<string[]> {
     const content = await page.getTextContent();
 
     // Group text items by Y coordinate to reconstruct lines
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lineMap = new Map<number, { str: string; x: number }[]>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const item of content.items as any[]) {

@@ -2,12 +2,18 @@
 // pdfjs-dist expects browser-like globals in Node runtimes. On Vercel we
 // provide them explicitly from @napi-rs/canvas before loading pdfjs.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const canvas = require("@napi-rs/canvas") as {
+let canvas: {
   DOMMatrix?: unknown;
   ImageData?: unknown;
   Path2D?: unknown;
-};
+} = {};
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  canvas = require("@napi-rs/canvas") as typeof canvas;
+} catch {
+  // Optional in some runtimes; pdfjs can still run without setting these globals.
+}
 
 const globals = globalThis as Record<string, unknown>;
 
