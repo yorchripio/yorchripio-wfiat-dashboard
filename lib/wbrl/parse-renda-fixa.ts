@@ -3,15 +3,18 @@
 // Uses pdfjs-dist legacy build directly on the server.
 
 import "@/lib/pdfjs-node-polyfills";
-import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
-const requireForPdfjs = createRequire(import.meta.url);
+const runtimeRequire = process
+  .getBuiltinModule("module")
+  .createRequire(import.meta.url);
+const pdfjsModulePath = ["pdfjs-dist", "legacy", "build", "pdf.mjs"].join("/");
+const pdfjsWorkerModulePath = ["pdfjs-dist", "legacy", "build", "pdf.worker.mjs"].join("/");
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const pdfjsLib: any = requireForPdfjs("pdfjs-dist/legacy/build/pdf.mjs");
+const pdfjsLib: any = runtimeRequire(pdfjsModulePath);
 // Point the fake worker to the real installed module rather than a bundled chunk path.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
-  requireForPdfjs.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")
+  runtimeRequire.resolve(pdfjsWorkerModulePath)
 ).href;
 
 export interface CdbPosition {
